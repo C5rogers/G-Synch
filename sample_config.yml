@@ -1,0 +1,2 @@
+test_pg_target: "postgres://<user>:<password>@<host>:5432/<db_name>"
+test_pg_given: "postgres://<user>:<password>@<host>:5432/<db_name>"
