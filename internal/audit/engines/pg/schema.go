@@ -5,6 +5,7 @@ import (
 )
 
 func (p *PostgresAdapter) LoadSchema(dsn string) (*core.Schema, error) {
+
 	// TODO: implement to load schema from the given dsn
 	// 	SELECT table_name
 	// FROM information_schema.tables

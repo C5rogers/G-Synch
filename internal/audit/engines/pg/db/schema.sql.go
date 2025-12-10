@@ -9,14 +9,29 @@ import (
 	"context"
 )
 
-const loadSchema = `-- name: LoadSchema :exec
-SELECT table_name
+const loadSchema = `-- name: LoadSchema :many
+SELECT table_name AS name
   FROM information_schema.tables
   WHERE table_schema = $1
 ORDER BY table_name
 `
 
-func (q *Queries) LoadSchema(ctx context.Context, schemaName interface{}) error {
-	_, err := q.db.Exec(ctx, loadSchema, schemaName)
-	return err
+func (q *Queries) LoadSchema(ctx context.Context, schemaName interface{}) ([]interface{}, error) {
+	rows, err := q.db.Query(ctx, loadSchema, schemaName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []interface{}
+	for rows.Next() {
+		var name interface{}
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

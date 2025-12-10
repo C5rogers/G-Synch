@@ -1,16 +1,16 @@
--- name: GetColumns :exec
+-- name: GetColumns :many
   SELECT
-	     column_name,
-	     data_type,
-	     is_nullable,
-	     column_default
+	     column_name as column_name,
+	     data_type as data_type,
+	     is_nullable as is_nullable,
+	     column_default as column_default
 	 FROM information_schema.columns
 	 WHERE table_schema = sqlc.arg(schema_name) AND table_name = sqlc.arg(table_name)
 	 ORDER BY ordinal_position;
 
--- name: GetForeignKeys :exec
+-- name: GetForeignKeys :many
   SELECT
-      kcu.column_name,
+      kcu.column_name AS column_name,
       ccu.table_name AS foreign_table_name,
       ccu.column_name AS foreign_column_name
   FROM
@@ -23,9 +23,9 @@
         AND ccu.table_schema = tc.table_schema
   WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = sqlc.arg(schema_name) AND tc.table_name = sqlc.arg(table_name);
 
--- name: GetPrimaryKeys :exec
+-- name: GetPrimaryKeys :many
   SELECT
-      kcu.column_name
+      kcu.column_name as column_name
   FROM
       information_schema.table_constraints AS tc
       JOIN information_schema.key_column_usage AS kcu
@@ -34,9 +34,9 @@
   WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = sqlc.arg(schema_name) AND tc.table_name = sqlc.arg(table_name)
   ORDER BY kcu.ordinal_position;
 
--- name: GetTables :exec
+-- name: GetTables :many
   SELECT
-      table_name
+      table_name as name
   FROM
       information_schema.tables
   WHERE table_schema = sqlc.arg(schema_name);

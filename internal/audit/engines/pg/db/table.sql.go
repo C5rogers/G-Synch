@@ -9,12 +9,12 @@ import (
 	"context"
 )
 
-const getColumns = `-- name: GetColumns :exec
+const getColumns = `-- name: GetColumns :many
   SELECT
-	     column_name,
-	     data_type,
-	     is_nullable,
-	     column_default
+	     column_name as column_name,
+	     data_type as data_type,
+	     is_nullable as is_nullable,
+	     column_default as column_default
 	 FROM information_schema.columns
 	 WHERE table_schema = $1 AND table_name = $2
 	 ORDER BY ordinal_position
@@ -25,14 +25,41 @@ type GetColumnsParams struct {
 	TableName  interface{} `json:"table_name"`
 }
 
-func (q *Queries) GetColumns(ctx context.Context, arg GetColumnsParams) error {
-	_, err := q.db.Exec(ctx, getColumns, arg.SchemaName, arg.TableName)
-	return err
+type GetColumnsRow struct {
+	ColumnName    interface{} `json:"column_name"`
+	DataType      interface{} `json:"data_type"`
+	IsNullable    interface{} `json:"is_nullable"`
+	ColumnDefault interface{} `json:"column_default"`
 }
 
-const getForeignKeys = `-- name: GetForeignKeys :exec
+func (q *Queries) GetColumns(ctx context.Context, arg GetColumnsParams) ([]GetColumnsRow, error) {
+	rows, err := q.db.Query(ctx, getColumns, arg.SchemaName, arg.TableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetColumnsRow
+	for rows.Next() {
+		var i GetColumnsRow
+		if err := rows.Scan(
+			&i.ColumnName,
+			&i.DataType,
+			&i.IsNullable,
+			&i.ColumnDefault,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getForeignKeys = `-- name: GetForeignKeys :many
   SELECT
-      kcu.column_name,
+      kcu.column_name AS column_name,
       ccu.table_name AS foreign_table_name,
       ccu.column_name AS foreign_column_name
   FROM
@@ -51,14 +78,35 @@ type GetForeignKeysParams struct {
 	TableName  interface{} `json:"table_name"`
 }
 
-func (q *Queries) GetForeignKeys(ctx context.Context, arg GetForeignKeysParams) error {
-	_, err := q.db.Exec(ctx, getForeignKeys, arg.SchemaName, arg.TableName)
-	return err
+type GetForeignKeysRow struct {
+	ColumnName        interface{} `json:"column_name"`
+	ForeignTableName  interface{} `json:"foreign_table_name"`
+	ForeignColumnName interface{} `json:"foreign_column_name"`
 }
 
-const getPrimaryKeys = `-- name: GetPrimaryKeys :exec
+func (q *Queries) GetForeignKeys(ctx context.Context, arg GetForeignKeysParams) ([]GetForeignKeysRow, error) {
+	rows, err := q.db.Query(ctx, getForeignKeys, arg.SchemaName, arg.TableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetForeignKeysRow
+	for rows.Next() {
+		var i GetForeignKeysRow
+		if err := rows.Scan(&i.ColumnName, &i.ForeignTableName, &i.ForeignColumnName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPrimaryKeys = `-- name: GetPrimaryKeys :many
   SELECT
-      kcu.column_name
+      kcu.column_name as column_name
   FROM
       information_schema.table_constraints AS tc
       JOIN information_schema.key_column_usage AS kcu
@@ -73,20 +121,50 @@ type GetPrimaryKeysParams struct {
 	TableName  interface{} `json:"table_name"`
 }
 
-func (q *Queries) GetPrimaryKeys(ctx context.Context, arg GetPrimaryKeysParams) error {
-	_, err := q.db.Exec(ctx, getPrimaryKeys, arg.SchemaName, arg.TableName)
-	return err
+func (q *Queries) GetPrimaryKeys(ctx context.Context, arg GetPrimaryKeysParams) ([]interface{}, error) {
+	rows, err := q.db.Query(ctx, getPrimaryKeys, arg.SchemaName, arg.TableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []interface{}
+	for rows.Next() {
+		var column_name interface{}
+		if err := rows.Scan(&column_name); err != nil {
+			return nil, err
+		}
+		items = append(items, column_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const getTables = `-- name: GetTables :exec
+const getTables = `-- name: GetTables :many
   SELECT
-      table_name
+      table_name as name
   FROM
       information_schema.tables
   WHERE table_schema = $1
 `
 
-func (q *Queries) GetTables(ctx context.Context, schemaName interface{}) error {
-	_, err := q.db.Exec(ctx, getTables, schemaName)
-	return err
+func (q *Queries) GetTables(ctx context.Context, schemaName interface{}) ([]interface{}, error) {
+	rows, err := q.db.Query(ctx, getTables, schemaName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []interface{}
+	for rows.Next() {
+		var name interface{}
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

@@ -30,3 +30,12 @@ sql:
               import: "github.com/guregu/null/v5"
               type: "Bool"
               pointer: false
+
+          - db_type: "information_schema.sql_identifier"
+            go_type: "string"
+
+          - db_type: "pg_catalog.varchar"
+            go_type: "string"
+
+          - db_type: "varchar"
+            go_type: "string"
