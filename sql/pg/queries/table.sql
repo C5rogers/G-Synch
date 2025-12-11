@@ -36,7 +36,7 @@
 
 -- name: GetTables :many
   SELECT
-      table_name as name
+      table_name as table_name
   FROM
       information_schema.tables
   WHERE table_schema = sqlc.arg(schema_name);

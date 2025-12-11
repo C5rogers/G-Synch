@@ -7,6 +7,8 @@ package pg_db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getColumns = `-- name: GetColumns :many
@@ -21,8 +23,8 @@ const getColumns = `-- name: GetColumns :many
 `
 
 type GetColumnsParams struct {
-	SchemaName interface{} `json:"schema_name"`
-	TableName  interface{} `json:"table_name"`
+	SchemaName pgtype.Text `json:"schema_name"`
+	TableName  pgtype.Text `json:"table_name"`
 }
 
 type GetColumnsRow struct {
@@ -74,8 +76,8 @@ const getForeignKeys = `-- name: GetForeignKeys :many
 `
 
 type GetForeignKeysParams struct {
-	SchemaName interface{} `json:"schema_name"`
-	TableName  interface{} `json:"table_name"`
+	SchemaName pgtype.Text `json:"schema_name"`
+	TableName  pgtype.Text `json:"table_name"`
 }
 
 type GetForeignKeysRow struct {
@@ -117,8 +119,8 @@ const getPrimaryKeys = `-- name: GetPrimaryKeys :many
 `
 
 type GetPrimaryKeysParams struct {
-	SchemaName interface{} `json:"schema_name"`
-	TableName  interface{} `json:"table_name"`
+	SchemaName pgtype.Text `json:"schema_name"`
+	TableName  pgtype.Text `json:"table_name"`
 }
 
 func (q *Queries) GetPrimaryKeys(ctx context.Context, arg GetPrimaryKeysParams) ([]interface{}, error) {
@@ -143,13 +145,13 @@ func (q *Queries) GetPrimaryKeys(ctx context.Context, arg GetPrimaryKeysParams) 
 
 const getTables = `-- name: GetTables :many
   SELECT
-      table_name as name
+      table_name as table_name
   FROM
       information_schema.tables
   WHERE table_schema = $1
 `
 
-func (q *Queries) GetTables(ctx context.Context, schemaName interface{}) ([]interface{}, error) {
+func (q *Queries) GetTables(ctx context.Context, schemaName pgtype.Text) ([]interface{}, error) {
 	rows, err := q.db.Query(ctx, getTables, schemaName)
 	if err != nil {
 		return nil, err
@@ -157,11 +159,11 @@ func (q *Queries) GetTables(ctx context.Context, schemaName interface{}) ([]inte
 	defer rows.Close()
 	var items []interface{}
 	for rows.Next() {
-		var name interface{}
-		if err := rows.Scan(&name); err != nil {
+		var table_name interface{}
+		if err := rows.Scan(&table_name); err != nil {
 			return nil, err
 		}
-		items = append(items, name)
+		items = append(items, table_name)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

@@ -9,7 +9,6 @@ type Column struct {
 
 type Table struct {
 	Name        string
-	Schema      Schema
 	Columns     []Column
 	PrimaryKey  []string
 	ForeignKeys []ForeignKey
@@ -21,5 +20,6 @@ type ForeignKey struct {
 	ReferencedColumn string
 }
 type Schema struct {
+	Name   string
 	Tables []Table
 }

@@ -7,16 +7,18 @@ package pg_db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const loadSchema = `-- name: LoadSchema :many
-SELECT table_name AS name
+SELECT table_name AS table_name
   FROM information_schema.tables
   WHERE table_schema = $1
 ORDER BY table_name
 `
 
-func (q *Queries) LoadSchema(ctx context.Context, schemaName interface{}) ([]interface{}, error) {
+func (q *Queries) LoadSchema(ctx context.Context, schemaName pgtype.Text) ([]interface{}, error) {
 	rows, err := q.db.Query(ctx, loadSchema, schemaName)
 	if err != nil {
 		return nil, err
@@ -24,11 +26,11 @@ func (q *Queries) LoadSchema(ctx context.Context, schemaName interface{}) ([]int
 	defer rows.Close()
 	var items []interface{}
 	for rows.Next() {
-		var name interface{}
-		if err := rows.Scan(&name); err != nil {
+		var table_name interface{}
+		if err := rows.Scan(&table_name); err != nil {
 			return nil, err
 		}
-		items = append(items, name)
+		items = append(items, table_name)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
