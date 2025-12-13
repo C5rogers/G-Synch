@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func (p *PostgresAdapter) LoadSchema(dsn string) (*core.Schema, error) {
+func (p *Adapter) LoadSchema(dsn string) (*core.Schema, error) {
 
 	queries := pg_db.New(p.db)
 	ctx := context.Background()

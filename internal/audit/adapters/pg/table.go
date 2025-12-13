@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func (p *PostgresAdapter) GetColumns(dsn string, table *core.Table) ([]core.Column, error) {
+func (p *Adapter) GetColumns(dsn string, table *core.Table) ([]core.Column, error) {
 
 	queries := pg_db.New(p.db)
 	ctx := context.Background()
@@ -33,7 +33,7 @@ func (p *PostgresAdapter) GetColumns(dsn string, table *core.Table) ([]core.Colu
 	return cols, nil
 }
 
-func (p *PostgresAdapter) GetForeignKeys(dsn string, table *core.Table) ([]core.ForeignKey, error) {
+func (p *Adapter) GetForeignKeys(dsn string, table *core.Table) ([]core.ForeignKey, error) {
 
 	queries := pg_db.New(p.db)
 	ctx := context.Background()
@@ -56,7 +56,7 @@ func (p *PostgresAdapter) GetForeignKeys(dsn string, table *core.Table) ([]core.
 	return fks, nil
 }
 
-func (p *PostgresAdapter) GetPrimaryKeys(dsn string, table *core.Table) ([]string, error) {
+func (p *Adapter) GetPrimaryKeys(dsn string, table *core.Table) ([]string, error) {
 
 	queries := pg_db.New(p.db)
 	ctx := context.Background()
@@ -77,7 +77,7 @@ func (p *PostgresAdapter) GetPrimaryKeys(dsn string, table *core.Table) ([]strin
 	return pks, nil
 }
 
-func (p *PostgresAdapter) CopyTableData(srcDSN, dstDSN, table string) error {
+func (p *Adapter) CopyTableData(srcDSN, dstDSN, table string) error {
 	// TODO: implement to copy table data from srcDSN to dstDSN
 	// 	COPY table_name TO 'another table';
 	return nil

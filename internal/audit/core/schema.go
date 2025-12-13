@@ -1,5 +1,7 @@
 package core
 
+import "context"
+
 type Column struct {
 	Name         string
 	DataType     string
@@ -22,4 +24,13 @@ type ForeignKey struct {
 type Schema struct {
 	Name   string
 	Tables []Table
+}
+
+type SchemaAdapter interface {
+	LoadSchema(ctx context.Context, dsn string) (*Schema, error)
+	GetColumns(ctx context.Context, dsn string, table *Table) ([]Column, error)
+	GetForeignKeys(ctx context.Context, dsn string, table *Table) ([]ForeignKey, error)
+	GetPrimaryKeys(ctx context.Context, dsn string, table *Table) ([]string, error)
+	CopyTableData(ctx context.Context, srcDSN, dstDSN, table string) error
+	Engine() string
 }
