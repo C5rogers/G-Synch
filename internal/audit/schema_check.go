@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/C5rogers/G-Synch/internal/audit/core"
 )
@@ -35,8 +36,54 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 		}
 		warnings = append(warnings, compareColumns(name, tTable, gTable)...)
 
+		pkDiff, err := comparePrimaryKeyValues(ctx, target, given, schemaName, tTable)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("table %s: error comparing rows: %v", name, err))
+			continue
+		}
+		warnings = append(warnings, pkDiff)
 	}
 	return warnings, nil
+}
+
+func serializeRow(row []interface{}) string {
+	parts := make([]string, len(row))
+	for i, v := range row {
+		parts[i] = fmt.Sprintf("%v", v)
+	}
+	return strings.Join(parts, "|")
+}
+
+func comparePrimaryKeyValues(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string, table core.Table) (string, error) {
+	tPks, err := target.GetPrimaryKeyValues(ctx, schemaName, table.Name)
+	if err != nil {
+		return "", err
+	}
+	gPks, err := given.GetPrimaryKeyValues(ctx, schemaName, table.Name)
+	if err != nil {
+		return "", err
+	}
+
+	// Convert slices to map for quick lookup
+	tMap := make(map[string]struct{}, len(tPks))
+	for _, row := range tPks {
+		key := serializeRow(row)
+		tMap[key] = struct{}{}
+	}
+	gMap := make(map[string]struct{}, len(gPks))
+	for _, row := range gPks {
+		key := serializeRow(row)
+		gMap[key] = struct{}{}
+	}
+
+	// Count unsynced rows
+	diffCount := 0
+	for key := range tMap {
+		if _, ok := gMap[key]; !ok {
+			diffCount++
+		}
+	}
+	return fmt.Sprintf("table %s: %d unsynced rows", table.Name, diffCount), nil
 }
 
 func compareColumns(table string, target core.Table, given core.Table) []string {

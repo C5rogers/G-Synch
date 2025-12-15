@@ -32,5 +32,6 @@ type SchemaAdapter interface {
 	GetForeignKeys(ctx context.Context, dsn string, table *Table) ([]ForeignKey, error)
 	GetPrimaryKeys(ctx context.Context, dsn string, table *Table) ([]string, error)
 	CopyTableData(ctx context.Context, srcDSN, dstDSN, table string) error
+	GetPrimaryKeyValues(ctx context.Context, dsn, table string) ([][]interface{}, error)
 	Engine() string
 }
