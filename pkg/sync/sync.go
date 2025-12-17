@@ -18,4 +18,5 @@ func NewSyncAPI(GivenDB, TargetDB *pgxpool.Pool) (*Sync, error) {
 	return s, nil
 }
 
-func (s *Sync) Synch(givenDB string, activityID *string, activityType *string) {}
+func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activityType *string, schema string) {
+}

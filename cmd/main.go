@@ -31,7 +31,11 @@ func main() {
 						Action: func(cliCtx *cli.Context) error {
 							givenDB := cliCtx.Args().First()
 							targetDB := cliCtx.Args().Get(1)
-							return run(cliCtx.String("config"), cliCtx.String("env"), "check", givenDB, targetDB)
+							schemaFlag := cliCtx.String("schema")
+							if schemaFlag == "" {
+								schemaFlag = "public"
+							}
+							return run(cliCtx.String("config"), cliCtx.String("env"), "check", givenDB, targetDB, schemaFlag)
 						},
 					},
 					{
@@ -40,7 +44,11 @@ func main() {
 						Action: func(cliCtx *cli.Context) error {
 							givenDB := cliCtx.Args().First()
 							targetDB := cliCtx.Args().Get(1)
-							return run(cliCtx.String("config"), cliCtx.String("env"), "synch", givenDB, targetDB)
+							schemaFlag := cliCtx.String("schema")
+							if schemaFlag == "" {
+								schemaFlag = "public"
+							}
+							return run(cliCtx.String("config"), cliCtx.String("env"), "synch", givenDB, targetDB, schemaFlag)
 						},
 					},
 					{
@@ -49,7 +57,11 @@ func main() {
 						Action: func(cliCtx *cli.Context) error {
 							givenDB := cliCtx.Args().First()
 							targetDB := cliCtx.Args().Get(1)
-							return run(cliCtx.String("config"), cliCtx.String("env"), "reverse-check", givenDB, targetDB)
+							schemaFlag := cliCtx.String("schema")
+							if schemaFlag == "" {
+								schemaFlag = "public"
+							}
+							return run(cliCtx.String("config"), cliCtx.String("env"), "reverse-check", givenDB, targetDB, schemaFlag)
 						},
 					},
 				},
@@ -64,6 +76,10 @@ func main() {
 				Name:  "env",
 				Usage: "pass environment name",
 			},
+			&cli.StringFlag{
+				Name:  "schema",
+				Usage: "pass schema name by default public if not passed",
+			},
 		},
 	}
 
@@ -72,7 +88,7 @@ func main() {
 	}
 }
 
-func run(configPath, env, cmd, givenDB string, targetDB string) error {
+func run(configPath, env, cmd, givenDB string, targetDB string, schema string) error {
 	config, err := config.Load(configPath)
 	if err != nil {
 		return err
@@ -113,11 +129,11 @@ func run(configPath, env, cmd, givenDB string, targetDB string) error {
 
 	switch command {
 	case string(models.CHECK):
-		s.Check(givenDB, nil, nil)
+		s.Check(targetDB, givenDB, nil, nil, schema)
 	case string(models.SYNCH):
-		s.Synch(givenDB, nil, nil)
+		s.Synch(targetDB, givenDB, nil, nil, schema)
 	case string(models.REVERSE_CHECK):
-		s.ReverseCheck(givenDB, nil, nil)
+		s.ReverseCheck(targetDB, givenDB, nil, nil, schema)
 	default:
 		slog.With("cmd", cmd).Error("unknown command")
 	}

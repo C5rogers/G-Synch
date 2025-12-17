@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/C5rogers/G-Synch/internal/audit/core"
 	pg_db "github.com/C5rogers/G-Synch/internal/audit/engines/pg/db"
@@ -16,6 +17,8 @@ func (p *Adapter) LoadSchema(dsn string) (*core.Schema, error) {
 	var tables []interface{}
 	tables, err := queries.LoadSchema(ctx, pgtype.Text{String: dsn, Valid: true})
 	if err != nil {
+		// here it is the error for database connection
+		fmt.Println("We are here:", err)
 		return nil, err
 	}
 	schema := &core.Schema{
