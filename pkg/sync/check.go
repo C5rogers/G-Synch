@@ -40,7 +40,7 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 	givenDBAdapter := pg.New(s.GivenDB)
 
 	ctx := context.Background()
-	targetSchemaAdapter, err := targetDBAdapter.LoadSchema(schema)
+	targetSchema, err := targetDBAdapter.LoadSchema(ctx, schema)
 	if err != nil {
 		if writer != nil {
 			fmt.Fprintf(writer, "Error loading target schema: %v\n", err)
@@ -49,7 +49,7 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 		}
 		return
 	}
-	givenSchemaAdapter, err := givenDBAdapter.LoadSchema(schema)
+	givenSchema, err := givenDBAdapter.LoadSchema(ctx, schema)
 	if err != nil {
 		if writer != nil {
 			fmt.Fprintf(writer, "Error loading given schema: %v\n", err)
@@ -60,10 +60,11 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 	}
 
 	auditor := audit.SchemaAudit{}
+	fmt.Println("the schemas loaded are:", targetSchema.Name, givenSchema.Name)
 
 	// here create the pg audit to run audit.Check function
 
-	warnings, err := auditor.Check(ctx, targetSchemaAdapter, givenSchemaAdapter, schema)
+	warnings, err := auditor.Check(ctx, targetDBAdapter, givenDBAdapter, schema)
 	if err != nil {
 		if writer != nil {
 			fmt.Fprintf(writer, "Error during audit check: %v\n", err)

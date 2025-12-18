@@ -10,7 +10,7 @@ import (
 )
 
 func (a *Adapter) GetPrimaryKeyValues(ctx context.Context, schemaName, tableName string) ([][]interface{}, error) {
-	pkCols, err := a.GetPrimaryKeys(schemaName, &core.Table{Name: tableName})
+	pkCols, err := a.GetPrimaryKeys(ctx, schemaName, &core.Table{Name: tableName})
 	if err != nil {
 		return nil, err
 	}

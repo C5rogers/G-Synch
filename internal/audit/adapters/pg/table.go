@@ -8,10 +8,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func (p *Adapter) GetColumns(dsn string, table *core.Table) ([]core.Column, error) {
+func (p *Adapter) GetColumns(ctx context.Context, dsn string, table *core.Table) ([]core.Column, error) {
 
 	queries := pg_db.New(p.db)
-	ctx := context.Background()
 
 	columns, err := queries.GetColumns(ctx, pg_db.GetColumnsParams{
 		SchemaName: pgtype.Text{String: dsn, Valid: true},
@@ -33,10 +32,9 @@ func (p *Adapter) GetColumns(dsn string, table *core.Table) ([]core.Column, erro
 	return cols, nil
 }
 
-func (p *Adapter) GetForeignKeys(dsn string, table *core.Table) ([]core.ForeignKey, error) {
+func (p *Adapter) GetForeignKeys(ctx context.Context, dsn string, table *core.Table) ([]core.ForeignKey, error) {
 
 	queries := pg_db.New(p.db)
-	ctx := context.Background()
 	foreignKeys, err := queries.GetForeignKeys(ctx, pg_db.GetForeignKeysParams{
 		SchemaName: pgtype.Text{String: dsn, Valid: true},
 		TableName:  pgtype.Text{String: table.Name, Valid: true},
@@ -56,10 +54,9 @@ func (p *Adapter) GetForeignKeys(dsn string, table *core.Table) ([]core.ForeignK
 	return fks, nil
 }
 
-func (p *Adapter) GetPrimaryKeys(dsn string, table *core.Table) ([]string, error) {
+func (p *Adapter) GetPrimaryKeys(ctx context.Context, dsn string, table *core.Table) ([]string, error) {
 
 	queries := pg_db.New(p.db)
-	ctx := context.Background()
 
 	primaryKeys, err := queries.GetPrimaryKeys(ctx, pg_db.GetPrimaryKeysParams{
 		SchemaName: pgtype.Text{String: dsn, Valid: true},
@@ -77,7 +74,7 @@ func (p *Adapter) GetPrimaryKeys(dsn string, table *core.Table) ([]string, error
 	return pks, nil
 }
 
-func (p *Adapter) CopyTableData(srcDSN, dstDSN, table string) error {
+func (p *Adapter) CopyTableData(ctx context.Context, srcDSN, dstDSN, table string) error {
 	// TODO: implement to copy table data from srcDSN to dstDSN
 	// 	COPY table_name TO 'another table';
 	return nil

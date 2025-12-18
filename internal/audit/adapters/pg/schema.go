@@ -2,23 +2,20 @@ package pg
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/C5rogers/G-Synch/internal/audit/core"
 	pg_db "github.com/C5rogers/G-Synch/internal/audit/engines/pg/db"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func (p *Adapter) LoadSchema(dsn string) (*core.Schema, error) {
+func (p *Adapter) LoadSchema(ctx context.Context, dsn string) (*core.Schema, error) {
 
 	queries := pg_db.New(p.db)
-	ctx := context.Background()
 
 	var tables []interface{}
 	tables, err := queries.LoadSchema(ctx, pgtype.Text{String: dsn, Valid: true})
 	if err != nil {
 		// here it is the error for database connection
-		fmt.Println("We are here:", err)
 		return nil, err
 	}
 	schema := &core.Schema{
@@ -42,11 +39,17 @@ func (p *Adapter) LoadSchema(dsn string) (*core.Schema, error) {
 			return nil, err
 		}
 		for _, c := range columns {
+			var defaultValue *string
+			if c.ColumnDefault != nil {
+				if v, ok := c.ColumnDefault.(string); ok {
+					defaultValue = &v
+				}
+			}
 			column := core.Column{
 				Name:         c.ColumnName.(string),
 				DataType:     c.DataType.(string),
 				IsNullable:   c.IsNullable.(string) == "YES",
-				DefaultValue: c.ColumnDefault.(*string),
+				DefaultValue: defaultValue,
 			}
 			table.Columns = append(table.Columns, column)
 		}
