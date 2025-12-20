@@ -35,7 +35,8 @@ func main() {
 							if schemaFlag == "" {
 								schemaFlag = "public"
 							}
-							return run(cliCtx.String("config"), cliCtx.String("env"), "check", givenDB, targetDB, schemaFlag)
+							logToFile := cliCtx.Bool("log-to-file")
+							return run(cliCtx.String("config"), cliCtx.String("env"), "check", givenDB, targetDB, schemaFlag, logToFile)
 						},
 					},
 					{
@@ -48,7 +49,8 @@ func main() {
 							if schemaFlag == "" {
 								schemaFlag = "public"
 							}
-							return run(cliCtx.String("config"), cliCtx.String("env"), "synch", givenDB, targetDB, schemaFlag)
+							logToFile := cliCtx.Bool("log-to-file")
+							return run(cliCtx.String("config"), cliCtx.String("env"), "synch", givenDB, targetDB, schemaFlag, logToFile)
 						},
 					},
 					{
@@ -61,7 +63,8 @@ func main() {
 							if schemaFlag == "" {
 								schemaFlag = "public"
 							}
-							return run(cliCtx.String("config"), cliCtx.String("env"), "reverse-check", givenDB, targetDB, schemaFlag)
+							logToFile := cliCtx.Bool("log-to-file")
+							return run(cliCtx.String("config"), cliCtx.String("env"), "reverse-check", givenDB, targetDB, schemaFlag, logToFile)
 						},
 					},
 				},
@@ -80,6 +83,10 @@ func main() {
 				Name:  "schema",
 				Usage: "pass schema name by default public if not passed",
 			},
+			&cli.BoolFlag{
+				Name:  "log-to-file",
+				Usage: "log output to a file",
+			},
 		},
 	}
 
@@ -88,7 +95,7 @@ func main() {
 	}
 }
 
-func run(configPath, env, cmd, givenDB string, targetDB string, schema string) error {
+func run(configPath, env, cmd, givenDB string, targetDB string, schema string, logToFile bool) error {
 	config, err := config.Load(configPath)
 	if err != nil {
 		return err
@@ -129,11 +136,11 @@ func run(configPath, env, cmd, givenDB string, targetDB string, schema string) e
 
 	switch command {
 	case string(models.CHECK):
-		s.Check(targetDB, givenDB, nil, nil, schema)
+		s.Check(targetDB, givenDB, nil, nil, schema, logToFile)
 	case string(models.SYNCH):
-		s.Synch(targetDB, givenDB, nil, nil, schema)
+		s.Synch(targetDB, givenDB, nil, nil, schema, logToFile)
 	case string(models.REVERSE_CHECK):
-		s.ReverseCheck(targetDB, givenDB, nil, nil, schema)
+		s.ReverseCheck(targetDB, givenDB, nil, nil, schema, logToFile)
 	default:
 		slog.With("cmd", cmd).Error("unknown command")
 	}

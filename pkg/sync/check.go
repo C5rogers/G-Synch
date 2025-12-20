@@ -6,20 +6,29 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/C5rogers/G-Synch/internal/audit"
 	"github.com/C5rogers/G-Synch/internal/audit/adapters/pg"
 )
 
-func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activityType *string, schema string) {
-	// here we will setup an audit because all commands are audit struct types and the audit will abstract us the check and other sub commands
+func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activityType *string, schema string, logInFile bool) {
 
-	// var file *os.File
 	var writer *bufio.Writer
-	// TODO: implement the audit for each tables on the schema
-	if activityID != nil && activityType != nil {
+	if logInFile && activityID != nil && activityType != nil {
 		file, err := os.Create("logs/" + *activityID + "_" + *activityType + ".txt")
 		if err != nil {
+			log.Fatal(err)
+		}
+		writer = bufio.NewWriter(file)
+	} else if logInFile {
+		// create the below file if it does not exist
+		if err := os.MkdirAll("logs", os.ModePerm); err != nil {
+			log.Fatal(err)
+		}
+		file, err := os.Create("logs/audit_check_" + time.Now().Format("20060102150405") + ".txt")
+		if err != nil {
+			fmt.Println("we are here", err)
 			log.Fatal(err)
 		}
 		writer = bufio.NewWriter(file)
@@ -30,39 +39,12 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 		fmt.Printf("Audit check started between %s and %s of %s schema\n", targetDB, givenDB, schema)
 	}
 
-	// yellow := color.New(color.FgYellow).SprintFunc()
-	// red := color.New(color.FgRed).SprintFunc()
-	// blue := color.New(color.FgBlue).SprintFunc()
-	// green := color.New(color.FgGreen).SprintFunc()
-
-	// create the adapters for the target and given
 	targetDBAdapter := pg.New(s.TargetDB)
 	givenDBAdapter := pg.New(s.GivenDB)
 
 	ctx := context.Background()
-	targetSchema, err := targetDBAdapter.LoadSchema(ctx, schema)
-	if err != nil {
-		if writer != nil {
-			fmt.Fprintf(writer, "Error loading target schema: %v\n", err)
-		} else {
-			fmt.Printf("Error loading target schema: %v\n", err)
-		}
-		return
-	}
-	givenSchema, err := givenDBAdapter.LoadSchema(ctx, schema)
-	if err != nil {
-		if writer != nil {
-			fmt.Fprintf(writer, "Error loading given schema: %v\n", err)
-		} else {
-			fmt.Printf("Error loading given schema: %v\n", err)
-		}
-		return
-	}
 
 	auditor := audit.SchemaAudit{}
-	fmt.Println("the schemas loaded are:", targetSchema.Name, givenSchema.Name)
-
-	// here create the pg audit to run audit.Check function
 
 	warnings, err := auditor.Check(ctx, targetDBAdapter, givenDBAdapter, schema)
 	if err != nil {
@@ -72,6 +54,17 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 			fmt.Printf("Error during audit check: %v\n", err)
 		}
 	}
-	fmt.Println(warnings)
-
+	for _, warning := range warnings {
+		if writer != nil {
+			messageToLog := fmt.Sprintf("%s (%s): %s\n", warning.Label, warning.Type, warning.Message)
+			fmt.Fprintf(writer, "%s\n", messageToLog)
+		} else {
+			fmt.Println(warning.GetColoredMessage())
+		}
+	}
+	if writer != nil {
+		writer.Flush()
+	}
+	fmt.Println("Audit check completed.")
+	time.Sleep(2 * time.Second)
 }

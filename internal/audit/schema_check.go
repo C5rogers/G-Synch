@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/C5rogers/G-Synch/internal/audit/core"
+	"github.com/C5rogers/G-Synch/internal/models"
 )
 
 type SchemaAudit struct{}
@@ -14,16 +15,26 @@ func (a *SchemaAudit) Name() string {
 	return "schema-check"
 }
 
-func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string) ([]string, error) {
+func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string) ([]models.CheckReturn, error) {
 	targetSchema, err := target.LoadSchema(ctx, schemaName)
 	if err != nil {
-		return nil, err
+		targetSchemaError := models.CheckReturn{
+			Message: fmt.Sprintf("Error loading target schema: %v", err),
+			Type:    "ERROR",
+			Label:   "ERROR",
+		}
+		return []models.CheckReturn{targetSchemaError}, err
 	}
 	givenSchema, err := given.LoadSchema(ctx, schemaName)
 	if err != nil {
-		return nil, err
+		givenSchemaError := models.CheckReturn{
+			Message: fmt.Sprintf("Error loading given schema: %v", err),
+			Type:    "ERROR",
+			Label:   "ERROR",
+		}
+		return []models.CheckReturn{givenSchemaError}, err
 	}
-	var warnings []string
+	var warnings []models.CheckReturn
 
 	targetTables := mapTables(targetSchema.Tables)
 	givenTables := mapTables(givenSchema.Tables)
@@ -31,14 +42,23 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 	for name, tTable := range targetTables {
 		gTable, exists := givenTables[name]
 		if !exists {
-			warnings = append(warnings, "missing table: "+name)
+			newCheck := models.CheckReturn{
+				Message: fmt.Sprintf("MISSING TABLE: table %s is missing in %s schema", name, givenSchema.Name),
+				Type:    "MISSING",
+				Label:   "WARNING",
+			}
+			warnings = append(warnings, newCheck)
 			continue
 		}
 		warnings = append(warnings, compareColumns(name, tTable, gTable)...)
 
 		pkDiff, err := comparePrimaryKeyValues(ctx, target, given, schemaName, tTable)
 		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("table %s: error comparing rows: %v", name, err))
+			warnings = append(warnings, models.CheckReturn{
+				Message: fmt.Sprintf("TABLE ERROR %s: error comparing rows: %v", name, err),
+				Type:    "ERROR",
+				Label:   "ERROR",
+			})
 			continue
 		}
 		warnings = append(warnings, pkDiff)
@@ -54,14 +74,22 @@ func serializeRow(row []interface{}) string {
 	return strings.Join(parts, "|")
 }
 
-func comparePrimaryKeyValues(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string, table core.Table) (string, error) {
+func comparePrimaryKeyValues(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string, table core.Table) (models.CheckReturn, error) {
 	tPks, err := target.GetPrimaryKeyValues(ctx, schemaName, table.Name)
 	if err != nil {
-		return "", err
+		return models.CheckReturn{
+			Message: fmt.Sprintf("Error getting primary key values for table %s: %v", table.Name, err),
+			Type:    "ERROR",
+			Label:   "ERROR",
+		}, err
 	}
 	gPks, err := given.GetPrimaryKeyValues(ctx, schemaName, table.Name)
 	if err != nil {
-		return "", err
+		return models.CheckReturn{
+			Message: fmt.Sprintf("Error getting primary key values for table %s: %v", table.Name, err),
+			Type:    "ERROR",
+			Label:   "ERROR",
+		}, err
 	}
 
 	// Convert slices to map for quick lookup
@@ -83,11 +111,16 @@ func comparePrimaryKeyValues(ctx context.Context, target core.SchemaAdapter, giv
 			diffCount++
 		}
 	}
-	return fmt.Sprintf("table %s: %d unsynced rows", table.Name, diffCount), nil
+
+	return models.CheckReturn{
+		Message: fmt.Sprintf("MISMATCH TABLE %s: %d unsynced rows", table.Name, diffCount),
+		Type:    "MISMATCH",
+		Label:   "WARNING",
+	}, nil
 }
 
-func compareColumns(table string, target core.Table, given core.Table) []string {
-	var issues []string
+func compareColumns(table string, target core.Table, given core.Table) []models.CheckReturn {
+	var issues []models.CheckReturn
 
 	tCols := mapColumns(target.Columns)
 	gCols := mapColumns(given.Columns)
@@ -95,17 +128,27 @@ func compareColumns(table string, target core.Table, given core.Table) []string 
 	for name, col := range tCols {
 		gcol, ok := gCols[name]
 		if !ok {
-			issues = append(issues,
-				fmt.Sprintf("table %s: missing column %s", table, col.Name))
+			newIssue := models.CheckReturn{
+				Message: fmt.Sprintf("MISSING COLUMN: table %s: missing column %s", table, col.Name),
+				Type:    "MISSING",
+				Label:   "WARNING",
+			}
+			issues = append(issues, newIssue)
 			continue
 		}
 		if col.DataType != gcol.DataType {
-			issues = append(issues,
-				fmt.Sprintf("table %s: column %s of type %s mismatches with column %s of type %s", table, name, col.DataType, name, gcol.DataType))
+			issues = append(issues, models.CheckReturn{
+				Message: fmt.Sprintf("MISMATCH TABLE %s: column %s of type %s mismatches with column %s of type %s", table, name, col.DataType, name, gcol.DataType),
+				Type:    "MISMATCH",
+				Label:   "WARNING",
+			})
 		}
 		if col.IsNullable != gcol.IsNullable {
-			issues = append(issues,
-				fmt.Sprintf("table %s: column %s nullable mismatch", table, col.Name))
+			issues = append(issues, models.CheckReturn{
+				Message: fmt.Sprintf("MISMATCH TABLE %s: column %s nullable mismatch", table, col.Name),
+				Type:    "MISMATCH",
+				Label:   "WARNING",
+			})
 		}
 	}
 
