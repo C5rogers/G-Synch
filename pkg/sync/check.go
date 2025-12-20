@@ -28,7 +28,6 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 		}
 		file, err := os.Create("logs/audit_check_" + time.Now().Format("20060102150405") + ".txt")
 		if err != nil {
-			fmt.Println("we are here", err)
 			log.Fatal(err)
 		}
 		writer = bufio.NewWriter(file)
