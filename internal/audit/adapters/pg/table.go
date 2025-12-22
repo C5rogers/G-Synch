@@ -74,6 +74,6 @@ func (p *Adapter) GetPrimaryKeys(ctx context.Context, dsn string, table *core.Ta
 
 func (p *Adapter) CopyTableData(ctx context.Context, srcDSN, dstDSN, table string) error {
 	// TODO: implement to copy table data from srcDSN to dstDSN
-	// 	COPY table_name TO 'another table';
+	// 	Use: INSERT INTO destination_table SELECT * FROM source_table;
 	return nil
 }
