@@ -46,19 +46,19 @@ task generate:config
 - To check the differences between the given database and the target database, run the following command:
 
 ```bash
-task g:synch -- --env=<config environment> audit check <given_db> <target_db>
+task g:synch -- --env=<config environment> audit check <adapter>_<given_db> <adapter>_<target_db>
 ```
 
 - To perform the synchronization, use the following command:
 
 ```bash
-task g:synch -- --env=<config environment> audit synch <given_db> <target_db>
+task g:synch -- --env=<config environment> audit synch <adapter>_<given_db> <adapter>_<target_db>
 ```
 
 - To reverse check the difference from the given database to the target database, run the following command:
 
 ```bash
-task g:synch -- --env=<config environment> audit reverse-check <given_db> <target_db>
+task g:synch -- --env=<config environment> audit reverse-check <adapter>_<given_db> <adapter>_<target_db>
 ```
 
 ## 🧪 Testing
