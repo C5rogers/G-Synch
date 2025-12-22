@@ -16,7 +16,7 @@ A powerful database synchronization **CLI** tool built with **Go**. G-Synch enab
 
 ### Core Commands
 
-- `status`: Displays the current difference between the given database with the target database.
+- `check`: Displays the current difference between the given database with the target database.
 - `sync`: Initiates the synchronization process between the specified source and target databases.
 - `reverse-check`: Checks for differences in the reverse direction, from target to source database.
 
