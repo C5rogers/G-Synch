@@ -62,8 +62,69 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 			continue
 		}
 		warnings = append(warnings, pkDiff)
+
+		fkIssues, err := compareForeignKeys(ctx, given, schemaName, tTable)
+		if err != nil {
+			warnings = append(warnings, models.CheckReturn{
+				Message: fmt.Sprintf("TABLE ERROR %s: error comparing foreign keys: %v", name, err),
+				Type:    "ERROR",
+				Label:   "ERROR",
+			})
+			continue
+		}
+		warnings = append(warnings, fkIssues...)
+
 	}
 	return warnings, nil
+}
+
+func compareForeignKeys(ctx context.Context, given core.SchemaAdapter, schemaName string, table core.Table) ([]models.CheckReturn, error) {
+	var issues []models.CheckReturn
+	for _, fk := range table.ForeignKeys {
+		if fk.ReferencedTableSchema != schemaName {
+			dependencySchema, err := given.LoadSchema(ctx, fk.ReferencedTableSchema)
+			if err != nil {
+				issues = append(issues, models.CheckReturn{
+					Message: fmt.Sprintf("MISSING DEPENDENCY SCHEMA: table %s depends on schema %s which is missing", table.Name, fk.ReferencedTableSchema),
+					Type:    "MISSING_DEPENDENCY",
+					Label:   "DEPENDENCY",
+				})
+				continue
+			}
+			if dependencySchema == nil || len(dependencySchema.Tables) == 0 {
+				issues = append(issues, models.CheckReturn{
+					Message: fmt.Sprintf("MISSING DEPENDENCY SCHEMA: table %s depends on schema %s which is missing", table.Name, fk.ReferencedTableSchema),
+					Type:    "MISSING_DEPENDENCY",
+					Label:   "DEPENDENCY",
+				})
+				continue
+			}
+			dependencyTable, exists := mapTables(dependencySchema.Tables)[fk.ReferencedTable]
+			if !exists {
+				issues = append(issues, models.CheckReturn{
+					Message: fmt.Sprintf("MISSING DEPENDENCY TABLE: table %s depends on table %s in schema %s which is missing", table.Name, fk.ReferencedTable, fk.ReferencedTableSchema),
+					Type:    "MISSING_DEPENDENCY",
+					Label:   "DEPENDENCY",
+				})
+				continue
+			}
+			dependencyColumnExists := false
+			for _, col := range dependencyTable.Columns {
+				if col.Name == fk.ReferencedColumn {
+					dependencyColumnExists = true
+					break
+				}
+			}
+			if !dependencyColumnExists {
+				issues = append(issues, models.CheckReturn{
+					Message: fmt.Sprintf("MISSING DEPENDENCY COLUMN: table %s depends on column %s in table %s in schema %s which is missing", table.Name, fk.ReferencedColumn, fk.ReferencedTable, fk.ReferencedTableSchema),
+					Type:    "MISSING_DEPENDENCY",
+					Label:   "DEPENDENCY",
+				})
+			}
+		}
+	}
+	return issues, nil
 }
 
 func serializeRow(row []interface{}) string {

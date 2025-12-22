@@ -19,9 +19,10 @@ type Table struct {
 }
 
 type ForeignKey struct {
-	Column           string
-	ReferencedTable  string
-	ReferencedColumn string
+	Column                string
+	ReferencedTable       string
+	ReferencedColumn      string
+	ReferencedTableSchema string
 }
 type Schema struct {
 	Name   string

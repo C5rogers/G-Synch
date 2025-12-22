@@ -54,18 +54,16 @@ func (p *Adapter) LoadSchema(ctx context.Context, dsn string) (*core.Schema, err
 			table.Columns = append(table.Columns, column)
 		}
 		// for each table get foreign keys
-		foreignKeys, err := queries.GetForeignKeys(ctx, pg_db.GetForeignKeysParams{
-			SchemaName: pgtype.Text{String: dsn, Valid: true},
-			TableName:  pgtype.Text{String: tableName, Valid: true},
-		})
+		foreignKeys, err := queries.GetForeignKeys(ctx, pgtype.Text{String: tableName, Valid: true})
 		if err != nil {
 			return nil, err
 		}
 		for _, fk := range foreignKeys {
 			foreignKey := core.ForeignKey{
-				Column:           fk.ColumnName.(string),
-				ReferencedTable:  fk.ForeignTableName.(string),
-				ReferencedColumn: fk.ForeignColumnName.(string),
+				Column:                fk.ColumnName.(string),
+				ReferencedTable:       fk.ForeignTableName.(string),
+				ReferencedTableSchema: fk.ForeignTableSchema.(string),
+				ReferencedColumn:      fk.ForeignColumnName.(string),
 			}
 			table.ForeignKeys = append(table.ForeignKeys, foreignKey)
 		}

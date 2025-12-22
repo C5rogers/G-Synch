@@ -38,6 +38,8 @@ func (c CheckReturn) GetColoredMessage() string {
 		return blue(c.Message)
 	case "SUCCESS":
 		return green(c.Message)
+	case "DEPENDENCY":
+		return red(c.Message)
 	default:
 		return c.Message
 	}

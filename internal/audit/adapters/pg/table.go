@@ -35,19 +35,17 @@ func (p *Adapter) GetColumns(ctx context.Context, dsn string, table *core.Table)
 func (p *Adapter) GetForeignKeys(ctx context.Context, dsn string, table *core.Table) ([]core.ForeignKey, error) {
 
 	queries := pg_db.New(p.db)
-	foreignKeys, err := queries.GetForeignKeys(ctx, pg_db.GetForeignKeysParams{
-		SchemaName: pgtype.Text{String: dsn, Valid: true},
-		TableName:  pgtype.Text{String: table.Name, Valid: true},
-	})
+	foreignKeys, err := queries.GetForeignKeys(ctx, pgtype.Text{String: table.Name, Valid: true})
 	if err != nil {
 		return nil, err
 	}
 	var fks []core.ForeignKey
 	for _, fk := range foreignKeys {
 		foreignKey := core.ForeignKey{
-			Column:           fk.ColumnName.(string),
-			ReferencedTable:  fk.ForeignTableName.(string),
-			ReferencedColumn: fk.ForeignColumnName.(string),
+			Column:                fk.ColumnName.(string),
+			ReferencedTable:       fk.ForeignTableName.(string),
+			ReferencedTableSchema: fk.ForeignTableSchema.(string),
+			ReferencedColumn:      fk.ForeignColumnName.(string),
 		}
 		fks = append(fks, foreignKey)
 	}

@@ -63,7 +63,8 @@ const getForeignKeys = `-- name: GetForeignKeys :many
   SELECT
       kcu.column_name AS column_name,
       ccu.table_name AS foreign_table_name,
-      ccu.column_name AS foreign_column_name
+      ccu.column_name AS foreign_column_name,
+      tc.table_schema AS foreign_table_schema
   FROM
       information_schema.table_constraints AS tc
       JOIN information_schema.key_column_usage AS kcu
@@ -72,22 +73,18 @@ const getForeignKeys = `-- name: GetForeignKeys :many
       JOIN information_schema.constraint_column_usage AS ccu
         ON ccu.constraint_name = tc.constraint_name
         AND ccu.table_schema = tc.table_schema
-  WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1 AND tc.table_name = $2
+  WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = $1
 `
 
-type GetForeignKeysParams struct {
-	SchemaName pgtype.Text `json:"schema_name"`
-	TableName  pgtype.Text `json:"table_name"`
-}
-
 type GetForeignKeysRow struct {
-	ColumnName        interface{} `json:"column_name"`
-	ForeignTableName  interface{} `json:"foreign_table_name"`
-	ForeignColumnName interface{} `json:"foreign_column_name"`
+	ColumnName         interface{} `json:"column_name"`
+	ForeignTableName   interface{} `json:"foreign_table_name"`
+	ForeignColumnName  interface{} `json:"foreign_column_name"`
+	ForeignTableSchema interface{} `json:"foreign_table_schema"`
 }
 
-func (q *Queries) GetForeignKeys(ctx context.Context, arg GetForeignKeysParams) ([]GetForeignKeysRow, error) {
-	rows, err := q.db.Query(ctx, getForeignKeys, arg.SchemaName, arg.TableName)
+func (q *Queries) GetForeignKeys(ctx context.Context, tableName pgtype.Text) ([]GetForeignKeysRow, error) {
+	rows, err := q.db.Query(ctx, getForeignKeys, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +92,12 @@ func (q *Queries) GetForeignKeys(ctx context.Context, arg GetForeignKeysParams) 
 	var items []GetForeignKeysRow
 	for rows.Next() {
 		var i GetForeignKeysRow
-		if err := rows.Scan(&i.ColumnName, &i.ForeignTableName, &i.ForeignColumnName); err != nil {
+		if err := rows.Scan(
+			&i.ColumnName,
+			&i.ForeignTableName,
+			&i.ForeignColumnName,
+			&i.ForeignTableSchema,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
