@@ -36,5 +36,9 @@ type SchemaAdapter interface {
 	GetPrimaryKeys(ctx context.Context, dsn string, table *Table) ([]string, error)
 	CopyTableData(ctx context.Context, srcDSN, dstDSN, table string) error
 	GetPrimaryKeyValues(ctx context.Context, dsn, table string) ([][]interface{}, error)
+	SearchFirstPrimaryKeyValue(ctx context.Context, dsn, table string) ([]string, error)
+	CreateTemporaryTable(ctx context.Context) error
+	CreateTempRecords(ctx context.Context, values []string) (int64, error)
+	TruncateTemporaryTable(ctx context.Context) error
 	Engine() string
 }

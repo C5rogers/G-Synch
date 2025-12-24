@@ -3,3 +3,7 @@
 //   sqlc v1.30.0
 
 package pg_db
+
+type CompareTable struct {
+	ID string `json:"id"`
+}

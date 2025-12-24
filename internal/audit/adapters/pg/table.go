@@ -8,6 +8,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+func (p *Adapter) CreateTemporaryTable(ctx context.Context) error {
+	queries := pg_db.New(p.db)
+	err := queries.CreateTempCompareTable(ctx)
+	return err
+}
+
+func (p *Adapter) TruncateTemporaryTable(ctx context.Context) error {
+	queries := pg_db.New(p.db)
+	err := queries.TruncateCompareTable(ctx)
+	return err
+}
+
+func (p *Adapter) CreateTempRecords(ctx context.Context, values []string) (int64, error) {
+	queries := pg_db.New(p.db)
+	count, err := queries.CreateTempRecords(ctx, values)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (p *Adapter) GetColumns(ctx context.Context, dsn string, table *core.Table) ([]core.Column, error) {
 
 	queries := pg_db.New(p.db)

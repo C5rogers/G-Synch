@@ -52,7 +52,9 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 		}
 		warnings = append(warnings, compareColumns(name, tTable, gTable)...)
 
-		pkDiff, err := comparePrimaryKeyValues(ctx, target, given, schemaName, tTable)
+		// this should be replaced with a more efficient comparison by creating temp tables and migrating the primary key values over there and for each records of the given table cross check if it exists in the temp table
+
+		pkDiff, err := comparePrimaryKeyValuesUsingTempTable(ctx, target, given, schemaName, tTable)
 		if err != nil {
 			warnings = append(warnings, models.CheckReturn{
 				Message: fmt.Sprintf("TABLE ERROR %s: error comparing rows: %v", name, err),
@@ -133,6 +135,63 @@ func serializeRow(row []interface{}) string {
 		parts[i] = fmt.Sprintf("%v", v)
 	}
 	return strings.Join(parts, "|")
+}
+
+func comparePrimaryKeyValuesUsingTempTable(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string, table core.Table) (models.CheckReturn, error) {
+	tPks, err := target.GetPrimaryKeyValues(ctx, schemaName, table.Name)
+	if err != nil {
+		return models.CheckReturn{
+			Message: fmt.Sprintf("Error getting primary key values for table %s: %v", table.Name, err),
+			Type:    "ERROR",
+			Label:   "ERROR",
+		}, err
+	}
+	err = given.CreateTemporaryTable(ctx)
+	if err != nil {
+		return models.CheckReturn{
+			Message: fmt.Sprintf("Error creating temporary table for comparison: %v", err),
+			Type:    "ERROR",
+			Label:   "ERROR",
+		}, err
+	}
+
+	err = given.TruncateTemporaryTable(ctx)
+	if err != nil {
+		return models.CheckReturn{
+			Message: fmt.Sprintf("Error truncating temporary table for comparison: %v", err),
+			Type:    "ERROR",
+			Label:   "ERROR",
+		}, err
+	}
+
+	var serializedTPKs []string
+	for _, row := range tPks {
+		serializedTPKs = append(serializedTPKs, serializeRow(row))
+	}
+
+	_, err = given.CreateTempRecords(ctx, serializedTPKs)
+	if err != nil {
+		return models.CheckReturn{
+			Message: fmt.Sprintf("Error inserting records into temporary table for comparison: %v", err),
+			Type:    "ERROR",
+			Label:   "ERROR",
+		}, err
+	}
+	res, err := given.SearchFirstPrimaryKeyValue(ctx, schemaName, table.Name)
+	if err != nil {
+		return models.CheckReturn{
+			Message: fmt.Sprintf("Error searching primary key values in temporary table for comparison: %v", err),
+			Type:    "ERROR",
+			Label:   "ERROR",
+		}, err
+	}
+
+	return models.CheckReturn{
+		Message: fmt.Sprintf("MISMATCH TABLE %s: %d unsynced rows", table.Name, len(res)),
+		Type:    "MISMATCH",
+		Label:   "WARNING",
+	}, nil
+
 }
 
 func comparePrimaryKeyValues(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string, table core.Table) (models.CheckReturn, error) {
