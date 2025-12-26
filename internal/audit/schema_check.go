@@ -42,6 +42,9 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 	for name, tTable := range targetTables {
 		gTable, exists := givenTables[name]
 		if !exists {
+			if name == "compare_table" {
+				continue
+			}
 			newCheck := models.CheckReturn{
 				Message: fmt.Sprintf("MISSING TABLE: table %s is missing in %s schema", name, givenSchema.Name),
 				Type:    "MISSING",
@@ -52,8 +55,8 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 		}
 		warnings = append(warnings, compareColumns(name, tTable, gTable)...)
 
-		// this should be replaced with a more efficient comparison by creating temp tables and migrating the primary key values over there and for each records of the given table cross check if it exists in the temp table
-
+		// Compare primary key values using a temp table populated with target table data,
+		// and detect which target rows are missing in the given table.
 		pkDiff, err := comparePrimaryKeyValuesUsingTempTable(ctx, target, given, schemaName, tTable)
 		if err != nil {
 			warnings = append(warnings, models.CheckReturn{
@@ -63,7 +66,9 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 			})
 			continue
 		}
-		warnings = append(warnings, pkDiff)
+		if pkDiff.Message != "" {
+			warnings = append(warnings, pkDiff)
+		}
 
 		fkIssues, err := compareForeignKeys(ctx, given, schemaName, tTable)
 		if err != nil {
@@ -177,7 +182,7 @@ func comparePrimaryKeyValuesUsingTempTable(ctx context.Context, target core.Sche
 			Label:   "ERROR",
 		}, err
 	}
-	res, err := given.SearchFirstPrimaryKeyValue(ctx, schemaName, table.Name)
+	res, err := given.GetUnsyncedPrimaryKeyValues(ctx, schemaName, table.Name)
 	if err != nil {
 		return models.CheckReturn{
 			Message: fmt.Sprintf("Error searching primary key values in temporary table for comparison: %v", err),
@@ -186,12 +191,15 @@ func comparePrimaryKeyValuesUsingTempTable(ctx context.Context, target core.Sche
 		}, err
 	}
 
-	return models.CheckReturn{
-		Message: fmt.Sprintf("MISMATCH TABLE %s: %d unsynced rows", table.Name, len(res)),
-		Type:    "MISMATCH",
-		Label:   "WARNING",
-	}, nil
-
+	var returnableCheckReturn models.CheckReturn
+	if len(res) > 0 {
+		returnableCheckReturn = models.CheckReturn{
+			Message: fmt.Sprintf("MISMATCH TABLE %s: %d unsynced rows", table.Name, len(res)),
+			Type:    "MISMATCH",
+			Label:   "WARNING",
+		}
+	}
+	return returnableCheckReturn, nil
 }
 
 func comparePrimaryKeyValues(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string, table core.Table) (models.CheckReturn, error) {

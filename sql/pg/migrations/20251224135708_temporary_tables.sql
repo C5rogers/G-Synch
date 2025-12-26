@@ -7,5 +7,5 @@ CREATE TEMP TABLE compare_table (
 
 -- +goose Down
 -- +goose StatementBegin
-SELECT 'down SQL query';
+DROP TABLE IF EXISTS compare_table;
 -- +goose StatementEnd

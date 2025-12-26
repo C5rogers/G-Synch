@@ -16,8 +16,7 @@ func (p *Adapter) CreateTemporaryTable(ctx context.Context) error {
 
 func (p *Adapter) TruncateTemporaryTable(ctx context.Context) error {
 	queries := pg_db.New(p.db)
-	err := queries.TruncateCompareTable(ctx)
-	return err
+	return queries.TruncateCompareTable(ctx)
 }
 
 func (p *Adapter) CreateTempRecords(ctx context.Context, values []string) (int64, error) {

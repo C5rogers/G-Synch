@@ -5,6 +5,9 @@ dotenv: [".env"]
 interval: 500ms
 
 tasks:
+  sqlc:generate:
+    cmds:
+      - DATABASE_URL=$DATABASE_URL sqlc generate
   g:synch:
     dotenv: [".env"]
     cmds:

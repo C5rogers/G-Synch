@@ -43,7 +43,7 @@ func (a *Adapter) GetPrimaryKeyValues(ctx context.Context, schemaName, tableName
 	return results, nil
 }
 
-func (a *Adapter) SearchFirstPrimaryKeyValue(ctx context.Context, schemaName, tableName string) ([]string, error) {
+func (a *Adapter) GetUnsyncedPrimaryKeyValues(ctx context.Context, schemaName, tableName string) ([]string, error) {
 	pkCols, err := a.GetPrimaryKeys(ctx, schemaName, &core.Table{Name: tableName})
 	if err != nil {
 		return []string{}, err
@@ -52,7 +52,7 @@ func (a *Adapter) SearchFirstPrimaryKeyValue(ctx context.Context, schemaName, ta
 		return []string{}, fmt.Errorf("table %s.%s has no primary key", schemaName, tableName)
 	}
 	firstPrimaryKey := pkCols[0]
-	query := fmt.Sprintf("SELECT id FROM compare_table WHERE id NOT IN (SELECT %s::text FROM %s.%s);", firstPrimaryKey, schemaName, tableName)
+	query := fmt.Sprintf("SELECT id FROM compare_table WHERE id NOT IN (SELECT %s::text FROM %s.%s);", pq.QuoteIdentifier(firstPrimaryKey), pq.QuoteIdentifier(schemaName), pq.QuoteIdentifier(tableName))
 	res, err := a.db.Query(ctx, query)
 	if err != nil {
 		return []string{}, err
