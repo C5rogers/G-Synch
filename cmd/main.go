@@ -110,7 +110,6 @@ func run(configPath, env, cmd, givenDB string, targetDB string, schema string, l
 		target = fmt.Sprintf("%s_%s", env, targetDB)
 	}
 
-	fmt.Println("env:", env, given, givenDB, target, targetDB)
 	targetConn, err := pgxpool.New(ctx, config[target])
 	if err != nil {
 		slog.With("error", err).Error("error connecting to target db")
