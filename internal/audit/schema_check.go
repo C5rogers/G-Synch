@@ -202,51 +202,6 @@ func comparePrimaryKeyValuesUsingTempTable(ctx context.Context, target core.Sche
 	return returnableCheckReturn, nil
 }
 
-func comparePrimaryKeyValues(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string, table core.Table) (models.CheckReturn, error) {
-	tPks, err := target.GetPrimaryKeyValues(ctx, schemaName, table.Name)
-	if err != nil {
-		return models.CheckReturn{
-			Message: fmt.Sprintf("Error getting primary key values for table %s: %v", table.Name, err),
-			Type:    "ERROR",
-			Label:   "ERROR",
-		}, err
-	}
-	gPks, err := given.GetPrimaryKeyValues(ctx, schemaName, table.Name)
-	if err != nil {
-		return models.CheckReturn{
-			Message: fmt.Sprintf("Error getting primary key values for table %s: %v", table.Name, err),
-			Type:    "ERROR",
-			Label:   "ERROR",
-		}, err
-	}
-
-	// Convert slices to map for quick lookup
-	tMap := make(map[string]struct{}, len(tPks))
-	for _, row := range tPks {
-		key := serializeRow(row)
-		tMap[key] = struct{}{}
-	}
-	gMap := make(map[string]struct{}, len(gPks))
-	for _, row := range gPks {
-		key := serializeRow(row)
-		gMap[key] = struct{}{}
-	}
-
-	// Count unsynced rows
-	diffCount := 0
-	for key := range tMap {
-		if _, ok := gMap[key]; !ok {
-			diffCount++
-		}
-	}
-
-	return models.CheckReturn{
-		Message: fmt.Sprintf("MISMATCH TABLE %s: %d unsynced rows", table.Name, diffCount),
-		Type:    "MISMATCH",
-		Label:   "WARNING",
-	}, nil
-}
-
 func compareColumns(table string, target core.Table, given core.Table) []models.CheckReturn {
 	var issues []models.CheckReturn
 
