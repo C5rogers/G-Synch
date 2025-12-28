@@ -42,3 +42,37 @@ func (a *Adapter) GetPrimaryKeyValues(ctx context.Context, schemaName, tableName
 	}
 	return results, nil
 }
+
+func (a *Adapter) GetUnsyncedPrimaryKeyValues(ctx context.Context, schemaName, tableName string) ([]string, error) {
+	pkCols, err := a.GetPrimaryKeys(ctx, schemaName, &core.Table{Name: tableName})
+	if err != nil {
+		return []string{}, err
+	}
+	if len(pkCols) == 0 {
+		return []string{}, fmt.Errorf("table %s.%s has no primary key", schemaName, tableName)
+	}
+
+	pkExprParts := make([]string, len(pkCols))
+	for i, col := range pkCols {
+		pkExprParts[i] = fmt.Sprintf("%s::text", pq.QuoteIdentifier(col))
+	}
+
+	pkSerializedExpr := fmt.Sprintf("concat_ws('::', %s)", strings.Join(pkExprParts, ", "))
+
+	query := fmt.Sprintf("SELECT id FROM compare_table WHERE id NOT IN (SELECT %s::text FROM %s.%s);", pkSerializedExpr, pq.QuoteIdentifier(schemaName), pq.QuoteIdentifier(tableName))
+	res, err := a.db.Query(ctx, query)
+	if err != nil {
+		return []string{}, err
+	}
+	defer res.Close()
+
+	var values []string
+	for res.Next() {
+		var value string
+		if err := res.Scan(&value); err != nil {
+			return []string{}, err
+		}
+		values = append(values, value)
+	}
+	return values, nil
+}

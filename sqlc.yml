@@ -3,8 +3,8 @@ sql:
   - engine: "postgresql"
     queries: "sql/pg/queries/**"
     schema: "sql/pg/schema"
-    # database:
-    #   uri: "postgres://<user>:<password>@<host>:5432/<db_name>"
+    database:
+      uri: "${DATABASE_URL}"
     gen:
       go:
         sql_package: "pgx/v5"

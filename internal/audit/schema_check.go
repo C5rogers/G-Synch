@@ -42,6 +42,9 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 	for name, tTable := range targetTables {
 		gTable, exists := givenTables[name]
 		if !exists {
+			if name == "compare_table" {
+				continue
+			}
 			newCheck := models.CheckReturn{
 				Message: fmt.Sprintf("MISSING TABLE: table %s is missing in %s schema", name, givenSchema.Name),
 				Type:    "MISSING",
@@ -52,7 +55,9 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 		}
 		warnings = append(warnings, compareColumns(name, tTable, gTable)...)
 
-		pkDiff, err := comparePrimaryKeyValues(ctx, target, given, schemaName, tTable)
+		// Compare primary key values using a temp table populated with target table data,
+		// and detect which target rows are missing in the given table.
+		pkDiff, err := comparePrimaryKeyValuesUsingTempTable(ctx, target, given, schemaName, tTable)
 		if err != nil {
 			warnings = append(warnings, models.CheckReturn{
 				Message: fmt.Sprintf("TABLE ERROR %s: error comparing rows: %v", name, err),
@@ -61,7 +66,9 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 			})
 			continue
 		}
-		warnings = append(warnings, pkDiff)
+		if pkDiff.Message != "" {
+			warnings = append(warnings, pkDiff)
+		}
 
 		fkIssues, err := compareForeignKeys(ctx, given, schemaName, tTable)
 		if err != nil {
@@ -135,7 +142,7 @@ func serializeRow(row []interface{}) string {
 	return strings.Join(parts, "|")
 }
 
-func comparePrimaryKeyValues(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string, table core.Table) (models.CheckReturn, error) {
+func comparePrimaryKeyValuesUsingTempTable(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string, table core.Table) (models.CheckReturn, error) {
 	tPks, err := target.GetPrimaryKeyValues(ctx, schemaName, table.Name)
 	if err != nil {
 		return models.CheckReturn{
@@ -144,40 +151,55 @@ func comparePrimaryKeyValues(ctx context.Context, target core.SchemaAdapter, giv
 			Label:   "ERROR",
 		}, err
 	}
-	gPks, err := given.GetPrimaryKeyValues(ctx, schemaName, table.Name)
+	err = given.CreateTemporaryTable(ctx)
 	if err != nil {
 		return models.CheckReturn{
-			Message: fmt.Sprintf("Error getting primary key values for table %s: %v", table.Name, err),
+			Message: fmt.Sprintf("Error creating temporary table for comparison: %v", err),
 			Type:    "ERROR",
 			Label:   "ERROR",
 		}, err
 	}
 
-	// Convert slices to map for quick lookup
-	tMap := make(map[string]struct{}, len(tPks))
-	for _, row := range tPks {
-		key := serializeRow(row)
-		tMap[key] = struct{}{}
-	}
-	gMap := make(map[string]struct{}, len(gPks))
-	for _, row := range gPks {
-		key := serializeRow(row)
-		gMap[key] = struct{}{}
+	err = given.TruncateTemporaryTable(ctx)
+	if err != nil {
+		return models.CheckReturn{
+			Message: fmt.Sprintf("Error truncating temporary table for comparison: %v", err),
+			Type:    "ERROR",
+			Label:   "ERROR",
+		}, err
 	}
 
-	// Count unsynced rows
-	diffCount := 0
-	for key := range tMap {
-		if _, ok := gMap[key]; !ok {
-			diffCount++
+	var serializedTPKs []string
+	for _, row := range tPks {
+		serializedTPKs = append(serializedTPKs, serializeRow(row))
+	}
+
+	_, err = given.CreateTempRecords(ctx, serializedTPKs)
+	if err != nil {
+		return models.CheckReturn{
+			Message: fmt.Sprintf("Error inserting records into temporary table for comparison: %v", err),
+			Type:    "ERROR",
+			Label:   "ERROR",
+		}, err
+	}
+	res, err := given.GetUnsyncedPrimaryKeyValues(ctx, schemaName, table.Name)
+	if err != nil {
+		return models.CheckReturn{
+			Message: fmt.Sprintf("Error searching primary key values in temporary table for comparison: %v", err),
+			Type:    "ERROR",
+			Label:   "ERROR",
+		}, err
+	}
+
+	var returnableCheckReturn models.CheckReturn
+	if len(res) > 0 {
+		returnableCheckReturn = models.CheckReturn{
+			Message: fmt.Sprintf("MISMATCH TABLE %s: %d unsynced rows", table.Name, len(res)),
+			Type:    "MISMATCH",
+			Label:   "WARNING",
 		}
 	}
-
-	return models.CheckReturn{
-		Message: fmt.Sprintf("MISMATCH TABLE %s: %d unsynced rows", table.Name, diffCount),
-		Type:    "MISMATCH",
-		Label:   "WARNING",
-	}, nil
+	return returnableCheckReturn, nil
 }
 
 func compareColumns(table string, target core.Table, given core.Table) []models.CheckReturn {
