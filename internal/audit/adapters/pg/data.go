@@ -51,8 +51,15 @@ func (a *Adapter) GetUnsyncedPrimaryKeyValues(ctx context.Context, schemaName, t
 	if len(pkCols) == 0 {
 		return []string{}, fmt.Errorf("table %s.%s has no primary key", schemaName, tableName)
 	}
-	firstPrimaryKey := pkCols[0]
-	query := fmt.Sprintf("SELECT id FROM compare_table WHERE id NOT IN (SELECT %s::text FROM %s.%s);", pq.QuoteIdentifier(firstPrimaryKey), pq.QuoteIdentifier(schemaName), pq.QuoteIdentifier(tableName))
+
+	pkExprParts := make([]string, len(pkCols))
+	for i, col := range pkCols {
+		pkExprParts[i] = fmt.Sprintf("%s::text", pq.QuoteIdentifier(col))
+	}
+
+	pkSerializedExpr := fmt.Sprintf("concat_ws('::', %s)", strings.Join(pkExprParts, ", "))
+
+	query := fmt.Sprintf("SELECT id FROM compare_table WHERE id NOT IN (SELECT %s::text FROM %s.%s);", pkSerializedExpr, pq.QuoteIdentifier(schemaName), pq.QuoteIdentifier(tableName))
 	res, err := a.db.Query(ctx, query)
 	if err != nil {
 		return []string{}, err
