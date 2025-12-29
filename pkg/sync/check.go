@@ -10,6 +10,7 @@ import (
 
 	"github.com/C5rogers/G-Synch/internal/audit"
 	"github.com/C5rogers/G-Synch/internal/audit/adapters/pg"
+	"github.com/C5rogers/G-Synch/internal/models"
 )
 
 func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activityType *string, schema string, logInFile bool) {
@@ -52,6 +53,14 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 		} else {
 			fmt.Printf("Error during audit check: %v\n", err)
 		}
+	}
+	if len(warnings) == 0 {
+		warning := models.CheckReturn{
+			Message: fmt.Sprintf("No differences found of %s relative to %s.", givenDB, targetDB),
+			Type:    "INFO",
+			Label:   "SUCCESS",
+		}
+		warnings = append(warnings, warning)
 	}
 	for _, warning := range warnings {
 		if writer != nil {
