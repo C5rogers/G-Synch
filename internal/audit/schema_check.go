@@ -55,8 +55,6 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 		}
 		warnings = append(warnings, compareColumns(name, tTable, gTable)...)
 
-		// Compare primary key values using a temp table populated with target table data,
-		// and detect which target rows are missing in the given table.
 		pkDiff, err := comparePrimaryKeyValuesUsingTempTable(ctx, target, given, schemaName, tTable)
 		if err != nil {
 			warnings = append(warnings, models.CheckReturn{
@@ -212,7 +210,7 @@ func compareColumns(table string, target core.Table, given core.Table) []models.
 		gcol, ok := gCols[name]
 		if !ok {
 			newIssue := models.CheckReturn{
-				Message: fmt.Sprintf("MISSING COLUMN: table %s: missing column %s", table, col.Name),
+				Message: fmt.Sprintf("MISSING COLUMN: table %s of given database missing column %s of target database", table, col.Name),
 				Type:    "MISSING",
 				Label:   "WARNING",
 			}
@@ -221,14 +219,14 @@ func compareColumns(table string, target core.Table, given core.Table) []models.
 		}
 		if col.DataType != gcol.DataType {
 			issues = append(issues, models.CheckReturn{
-				Message: fmt.Sprintf("MISMATCH TABLE %s: column %s of type %s mismatches with column %s of type %s", table, name, col.DataType, name, gcol.DataType),
+				Message: fmt.Sprintf("MISMATCH TABLE %s: column %s of type %s of given database mismatches with column %s of type %s of target database", table, name, col.DataType, name, gcol.DataType),
 				Type:    "MISMATCH",
 				Label:   "WARNING",
 			})
 		}
 		if col.IsNullable != gcol.IsNullable {
 			issues = append(issues, models.CheckReturn{
-				Message: fmt.Sprintf("MISMATCH TABLE %s: column %s nullable mismatch", table, col.Name),
+				Message: fmt.Sprintf("MISMATCH TABLE %s(GIVEN): column %s nullable mismatch", table, col.Name),
 				Type:    "MISMATCH",
 				Label:   "WARNING",
 			})
