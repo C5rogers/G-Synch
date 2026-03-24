@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/C5rogers/G-Synch/internal/audit/core"
+	"github.com/jackc/pgx/v5"
 	"github.com/lib/pq"
 )
 
@@ -105,19 +106,51 @@ func (a *Adapter) MigrateMissingRowsFrom(ctx context.Context, source core.Schema
 		return 0, 0, nil, err
 	}
 
+	// Collect rows that are missing in the destination.
+	missingRows := make([][]interface{}, 0)
+	for _, row := range sourceRows {
+		pkRef, pkErr := SerializePrimaryKey(row, pkCols, colIndex)
+		if pkErr != nil {
+			continue
+		}
+		if _, exists := destinationPKSet[pkRef]; exists {
+			continue
+		}
+		missingRows = append(missingRows, row)
+	}
+
+	if len(missingRows) == 0 {
+		return 0, 0, nil, nil
+	}
+
+	// Attempt bulk insert using pgx CopyFrom (PostgreSQL COPY protocol).
+	quotedCols := make([]string, len(colNames))
+	for i, col := range colNames {
+		quotedCols[i] = pq.QuoteIdentifier(col)
+	}
+
+	copyCount, copyErr := a.db.CopyFrom(
+		ctx,
+		pgx.Identifier{schema, table.Name},
+		colNames,
+		pgx.CopyFromRows(missingRows),
+	)
+
+	if copyErr == nil {
+		return int(copyCount), 0, nil, nil
+	}
+
+	// CopyFrom failed (e.g., constraint violation on some rows).
+	// Fall back to row-by-row insert to identify individual failures.
 	migrated := 0
 	denied := 0
 	deniedPKs := make([]string, 0)
 
-	for _, row := range sourceRows {
-		pkRef, pkErr := serializePrimaryKey(row, pkCols, colIndex)
+	for _, row := range missingRows {
+		pkRef, pkErr := SerializePrimaryKey(row, pkCols, colIndex)
 		if pkErr != nil {
 			denied++
 			deniedPKs = append(deniedPKs, fmt.Sprintf("<unresolved:%v>", pkErr))
-			continue
-		}
-
-		if _, exists := destinationPKSet[pkRef]; exists {
 			continue
 		}
 
@@ -128,7 +161,6 @@ func (a *Adapter) MigrateMissingRowsFrom(ctx context.Context, source core.Schema
 		}
 
 		migrated++
-		destinationPKSet[pkRef] = struct{}{}
 	}
 
 	return migrated, denied, deniedPKs, nil
@@ -218,7 +250,7 @@ func (a *Adapter) insertRow(ctx context.Context, schema string, table string, co
 	return err
 }
 
-func serializePrimaryKey(row []interface{}, pkCols []string, colIndex map[string]int) (string, error) {
+func SerializePrimaryKey(row []interface{}, pkCols []string, colIndex map[string]int) (string, error) {
 	parts := make([]string, len(pkCols))
 	for i, pk := range pkCols {
 		idx, ok := colIndex[strings.ToLower(pk)]

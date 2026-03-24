@@ -51,7 +51,7 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 		writer = bufio.NewWriter(file)
 	}
 
-	logf(writer, "Synchronization started between %s (target/source) and %s (given/destination) of %s schema", targetDB, givenDB, schema)
+	Logf(writer, "Synchronization started between %s (target/source) and %s (given/destination) of %s schema", targetDB, givenDB, schema)
 
 	var targetAdapter core.SchemaAdapter = pg.New(s.TargetDB)
 	var givenAdapter core.SchemaAdapter = pg.New(s.GivenDB)
@@ -59,16 +59,26 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 
 	targetSchema, err := targetAdapter.LoadSchema(ctx, schema)
 	if err != nil {
-		logf(writer, "Error loading target schema: %v", err)
-		flushWriter(writer)
+		Logf(writer, "Error loading target schema: %v", err)
+		FlushWriter(writer)
 		return
 	}
 
 	givenSchema, err := givenAdapter.LoadSchema(ctx, schema)
 	if err != nil {
-		logf(writer, "Error loading given schema: %v", err)
-		flushWriter(writer)
+		Logf(writer, "Error loading given schema: %v", err)
+		FlushWriter(writer)
 		return
+	}
+
+	// Sort tables by FK dependency order so parent tables are migrated first.
+	sortedTables, sortErr := core.TopologicalSortTables(targetSchema.Tables)
+	if sortErr != nil {
+		Logf(writer, "WARNING: Could not resolve table dependency order: %v", sortErr)
+		Logf(writer, "Falling back to unsorted table order.")
+		sortedTables = targetSchema.Tables
+	} else {
+		Logf(writer, "Tables sorted by FK dependency order (%d tables)", len(sortedTables))
 	}
 
 	givenTables := make(map[string]core.Table, len(givenSchema.Tables))
@@ -81,7 +91,7 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 	totalSkipped := 0
 	deniedByTable := map[string][]string{}
 
-	for _, sourceTable := range targetSchema.Tables {
+	for _, sourceTable := range sortedTables {
 		tableName := sourceTable.Name
 		if strings.EqualFold(tableName, "compare_table") {
 			continue
@@ -90,20 +100,20 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 		destinationTable, exists := givenTables[strings.ToLower(tableName)]
 		if !exists {
 			totalSkipped++
-			logf(writer, "SKIP TABLE %s: missing in given database", tableName)
+			Logf(writer, "SKIP TABLE %s: missing in given database", tableName)
 			continue
 		}
 
-		if !schemaCompatible(sourceTable, destinationTable) {
+		if !SchemaCompatible(sourceTable, destinationTable) {
 			totalSkipped++
-			logf(writer, "SKIP TABLE %s: schema mismatch (columns/types/nullability/primary keys differ)", tableName)
+			Logf(writer, "SKIP TABLE %s: schema mismatch (columns/types/nullability/primary keys differ)", tableName)
 			continue
 		}
 
 		migrated, denied, deniedPKs, migrateErr := givenAdapter.MigrateMissingRowsFrom(ctx, targetAdapter, schema, sourceTable)
 		if migrateErr != nil {
 			totalSkipped++
-			logf(writer, "SKIP TABLE %s: error during migration planning/execution: %v", tableName, migrateErr)
+			Logf(writer, "SKIP TABLE %s: error during migration planning/execution: %v", tableName, migrateErr)
 			continue
 		}
 
@@ -113,11 +123,11 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 			deniedByTable[tableName] = append(deniedByTable[tableName], deniedPKs...)
 		}
 
-		logf(writer, "TABLE %s: migrated=%d denied=%d", tableName, migrated, denied)
+		Logf(writer, "TABLE %s: migrated=%d denied=%d", tableName, migrated, denied)
 	}
 
-	logf(writer, "Synchronization completed.")
-	logf(writer, "Summary: migrated=%d denied=%d skipped_tables=%d", totalMigrated, totalDenied, totalSkipped)
+	Logf(writer, "Synchronization completed.")
+	Logf(writer, "Summary: migrated=%d denied=%d skipped_tables=%d", totalMigrated, totalDenied, totalSkipped)
 
 	if len(deniedByTable) > 0 {
 		tables := make([]string, 0, len(deniedByTable))
@@ -129,15 +139,15 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 		for _, tableName := range tables {
 			pkRefs := deniedByTable[tableName]
 			sort.Strings(pkRefs)
-			logf(writer, "Denied PK references in given DB for table %s: %s", tableName, strings.Join(pkRefs, ", "))
+			Logf(writer, "Denied PK references in given DB for table %s: %s", tableName, strings.Join(pkRefs, ", "))
 		}
 	}
 
-	flushWriter(writer)
+	FlushWriter(writer)
 	time.Sleep(2 * time.Second)
 }
 
-func schemaCompatible(sourceTable core.Table, destinationTable core.Table) bool {
+func SchemaCompatible(sourceTable core.Table, destinationTable core.Table) bool {
 	if len(sourceTable.Columns) != len(destinationTable.Columns) {
 		return false
 	}
@@ -178,7 +188,7 @@ func schemaCompatible(sourceTable core.Table, destinationTable core.Table) bool 
 	return true
 }
 
-func logf(writer *bufio.Writer, format string, args ...interface{}) {
+func Logf(writer *bufio.Writer, format string, args ...interface{}) {
 	message := fmt.Sprintf(format, args...)
 	if writer != nil {
 		fmt.Fprintf(writer, "%s\n", message)
@@ -187,7 +197,7 @@ func logf(writer *bufio.Writer, format string, args ...interface{}) {
 	fmt.Println(message)
 }
 
-func flushWriter(writer *bufio.Writer) {
+func FlushWriter(writer *bufio.Writer) {
 	if writer != nil {
 		_ = writer.Flush()
 	}
