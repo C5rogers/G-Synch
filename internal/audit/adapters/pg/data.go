@@ -218,7 +218,7 @@ func (a *Adapter) fetchPrimaryKeySet(ctx context.Context, schema string, table s
 		}
 		parts := make([]string, len(values))
 		for i, v := range values {
-			parts[i] = fmt.Sprintf("%v", v)
+			parts[i] = core.FormatDatabaseValue(v)
 		}
 		pks[strings.Join(parts, "::")] = struct{}{}
 	}
@@ -257,7 +257,7 @@ func SerializePrimaryKey(row []interface{}, pkCols []string, colIndex map[string
 		if !ok || idx >= len(row) {
 			return "", fmt.Errorf("primary key column %s is not found in row payload", pk)
 		}
-		parts[i] = fmt.Sprintf("%v", row[idx])
+		parts[i] = core.FormatDatabaseValue(row[idx])
 	}
 	return strings.Join(parts, "::"), nil
 }

@@ -3,7 +3,6 @@ package audit
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/C5rogers/G-Synch/internal/audit/core"
 	"github.com/C5rogers/G-Synch/internal/models"
@@ -135,11 +134,7 @@ func compareForeignKeys(ctx context.Context, given core.SchemaAdapter, schemaNam
 }
 
 func SerializeRow(row []interface{}) string {
-	parts := make([]string, len(row))
-	for i, v := range row {
-		parts[i] = fmt.Sprintf("%v", v)
-	}
-	return strings.Join(parts, "|")
+	return core.SerializeValues(row, "::")
 }
 
 func comparePrimaryKeyValuesUsingTempTable(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string, table core.Table) (models.CheckReturn, error) {

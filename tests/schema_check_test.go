@@ -11,7 +11,7 @@ import (
 func TestSerializeRow(t *testing.T) {
 	row := []interface{}{"abc", 123, true}
 	result := audit.SerializeRow(row)
-	assert.Equal(t, "abc|123|true", result)
+	assert.Equal(t, "abc::123::true", result)
 }
 
 func TestSerializeRow_SingleValue(t *testing.T) {
@@ -29,7 +29,13 @@ func TestSerializeRow_Empty(t *testing.T) {
 func TestSerializeRow_NilValues(t *testing.T) {
 	row := []interface{}{nil, "text", nil}
 	result := audit.SerializeRow(row)
-	assert.Equal(t, "<nil>|text|<nil>", result)
+	assert.Equal(t, "<nil>::text::<nil>", result)
+}
+
+func TestSerializeRow_UUIDArray(t *testing.T) {
+	row := []interface{}{[16]uint8{118, 88, 77, 15, 84, 235, 67, 211, 187, 100, 140, 155, 227, 6, 185, 238}, "value"}
+	result := audit.SerializeRow(row)
+	assert.Equal(t, "76584d0f-54eb-43d3-bb64-8c9be306b9ee::value", result)
 }
 
 func TestCompareColumns_Identical(t *testing.T) {
@@ -126,7 +132,7 @@ func TestCompareColumns_MultipleIssues(t *testing.T) {
 	given := core.Table{
 		Name: "products",
 		Columns: []core.Column{
-			{Name: "id", DataType: "bigint", IsNullable: false}, // type mismatch
+			{Name: "id", DataType: "bigint", IsNullable: false},    // type mismatch
 			{Name: "price", DataType: "numeric", IsNullable: true}, // nullable mismatch
 			// sku is missing
 		},
