@@ -66,6 +66,36 @@ func TestSerializePrimaryKey_NilValue(t *testing.T) {
 	assert.Equal(t, "<nil>", result)
 }
 
+func TestSerializePrimaryKey_UUIDBytes(t *testing.T) {
+	row := []interface{}{[]byte{118, 88, 77, 15, 84, 235, 67, 211, 187, 100, 140, 155, 227, 6, 185, 238}}
+	pkCols := []string{"id"}
+	colIndex := map[string]int{"id": 0}
+
+	result, err := pg.SerializePrimaryKey(row, pkCols, colIndex)
+	assert.NoError(t, err)
+	assert.Equal(t, "76584d0f-54eb-43d3-bb64-8c9be306b9ee", result)
+}
+
+func TestSerializePrimaryKey_ByteSliceString(t *testing.T) {
+	row := []interface{}{[]byte("team-42")}
+	pkCols := []string{"id"}
+	colIndex := map[string]int{"id": 0}
+
+	result, err := pg.SerializePrimaryKey(row, pkCols, colIndex)
+	assert.NoError(t, err)
+	assert.Equal(t, "team-42", result)
+}
+
+func TestSerializePrimaryKey_UUIDArray(t *testing.T) {
+	row := []interface{}{[16]uint8{118, 88, 77, 15, 84, 235, 67, 211, 187, 100, 140, 155, 227, 6, 185, 238}}
+	pkCols := []string{"id"}
+	colIndex := map[string]int{"id": 0}
+
+	result, err := pg.SerializePrimaryKey(row, pkCols, colIndex)
+	assert.NoError(t, err)
+	assert.Equal(t, "76584d0f-54eb-43d3-bb64-8c9be306b9ee", result)
+}
+
 func TestAdapterEngine(t *testing.T) {
 	adapter := &pg.Adapter{}
 	assert.Equal(t, "postgres", adapter.Engine())

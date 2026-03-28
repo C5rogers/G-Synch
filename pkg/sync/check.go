@@ -13,6 +13,9 @@ import (
 )
 
 func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activityType *string, schema string, logInFile bool) {
+	loader := NewLoader("Reading database metadata, dependencies, and rows...")
+	loader.Start()
+	defer loader.Stop()
 
 	var writer *bufio.Writer
 	if logInFile && activityID != nil && activityType != nil {
@@ -41,11 +44,7 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 		writer = bufio.NewWriter(file)
 		defer writer.Flush()
 	}
-	if writer != nil {
-		fmt.Fprintf(writer, "Audit check started between %s and %s of %s schema\n", targetDB, givenDB, schema)
-	} else {
-		fmt.Printf("Audit check started between %s and %s of %s schema\n", targetDB, givenDB, schema)
-	}
+	Printf(writer, "Audit check started between %s and %s of %s schema\n", targetDB, givenDB, schema)
 
 	targetDBAdapter := pg.New(s.TargetDB)
 	givenDBAdapter := pg.New(s.GivenDB)
@@ -56,20 +55,16 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 
 	warnings, err := auditor.Check(ctx, targetDBAdapter, givenDBAdapter, schema)
 	if err != nil {
-		if writer != nil {
-			fmt.Fprintf(writer, "Error during audit check: %v\n", err)
-		} else {
-			fmt.Printf("Error during audit check: %v\n", err)
-		}
+		Printf(writer, "Error during audit check: %v\n", err)
 	}
 	for _, warning := range warnings {
 		if writer != nil {
-			messageToLog := fmt.Sprintf("%s (%s): %s\n", warning.Label, warning.Type, warning.Message)
-			fmt.Fprintf(writer, "%s\n", messageToLog)
+			messageToLog := fmt.Sprintf("%s (%s): %s", warning.Label, warning.Type, warning.Message)
+			Printf(writer, "%s\n", messageToLog)
 		} else {
-			fmt.Println(warning.GetColoredMessage())
+			Println(writer, warning.GetColoredMessage())
 		}
 	}
 	FlushWriter(writer)
-	fmt.Println("Audit check completed.")
+	Println(nil, "Audit check completed.")
 }
