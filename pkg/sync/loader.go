@@ -12,6 +12,9 @@ type Loader struct {
 	message string
 	stopCh  chan struct{}
 	doneCh  chan struct{}
+	mu      sync.Mutex
+	started bool
+	stopped bool
 }
 
 var loaderState struct {
@@ -29,29 +32,48 @@ func NewLoader(message string) *Loader {
 }
 
 func (l *Loader) Start() {
-	if l == nil || !stdoutSupportsLoader() {
+	if l == nil || !supportsLoaderOutput() {
 		return
 	}
 
+	l.mu.Lock()
+	if l.started {
+		l.mu.Unlock()
+		return
+	}
+	l.started = true
+	l.mu.Unlock()
+
 	loaderState.mu.Lock()
+	previous := loaderState.active
 	loaderState.active = l
 	loaderState.mu.Unlock()
+
+	if previous != nil && previous != l {
+		previous.Stop()
+	}
 
 	go l.run()
 }
 
 func (l *Loader) Stop() {
-	if l == nil || !stdoutSupportsLoader() {
+	if l == nil || !supportsLoaderOutput() {
 		return
 	}
 
-	select {
-	case <-l.stopCh:
-	default:
+	l.mu.Lock()
+	if !l.started {
+		l.mu.Unlock()
+		return
+	}
+	if !l.stopped {
+		l.stopped = true
 		close(l.stopCh)
 	}
+	doneCh := l.doneCh
+	l.mu.Unlock()
 
-	<-l.doneCh
+	<-doneCh
 
 	loaderState.mu.Lock()
 	if loaderState.active == l {
@@ -82,7 +104,7 @@ func (l *Loader) run() {
 	}
 }
 
-func stdoutSupportsLoader() bool {
+var supportsLoaderOutput = func() bool {
 	info, err := os.Stdout.Stat()
 	if err != nil {
 		return false
@@ -92,7 +114,7 @@ func stdoutSupportsLoader() bool {
 }
 
 func clearLoaderLine() {
-	if !stdoutSupportsLoader() {
+	if !supportsLoaderOutput() {
 		return
 	}
 	loaderState.stdoutMu.Lock()
