@@ -33,24 +33,29 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 	var writer *bufio.Writer
 	if logToFile && activityID != nil && activityType != nil {
 		if err := os.MkdirAll("logs", os.ModePerm); err != nil {
-			log.Fatal(err)
+			log.Printf("failed to create logs directory: %v", err)
+			return
 		}
 		file, err := os.Create("logs/" + *activityID + "_" + *activityType + ".txt")
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("failed to create log file for activity %s (%s): %v", *activityID, *activityType, err)
+			return
 		}
 		defer file.Close()
 		writer = bufio.NewWriter(file)
 	} else if logToFile {
 		if err := os.MkdirAll("logs", os.ModePerm); err != nil {
-			log.Fatal(err)
+			log.Printf("failed to create logs directory: %v", err)
+			return
 		}
 		file, err := os.Create("logs/audit_synch_" + time.Now().Format("20060102150405") + ".txt")
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("failed to create synch log file: %v", err)
+			return
 		}
 		defer file.Close()
 		writer = bufio.NewWriter(file)
+		defer writer.Flush()
 	}
 
 	Logf(writer, "Synchronization started between %s (target/source) and %s (given/destination) of %s schema", targetDB, givenDB, schema)
