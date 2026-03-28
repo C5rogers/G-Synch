@@ -20,6 +20,7 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 		if err != nil {
 			log.Fatal(err)
 		}
+		defer file.Close()
 		writer = bufio.NewWriter(file)
 	} else if logInFile {
 		// create the below file if it does not exist
@@ -30,6 +31,7 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 		if err != nil {
 			log.Fatal(err)
 		}
+		defer file.Close()
 		writer = bufio.NewWriter(file)
 	}
 	if writer != nil {
@@ -61,8 +63,6 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 			fmt.Println(warning.GetColoredMessage())
 		}
 	}
-	if writer != nil {
-		writer.Flush()
-	}
+	FlushWriter(writer)
 	fmt.Println("Audit check completed.")
 }

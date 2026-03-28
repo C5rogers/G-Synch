@@ -39,6 +39,7 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 		if err != nil {
 			log.Fatal(err)
 		}
+		defer file.Close()
 		writer = bufio.NewWriter(file)
 	} else if logToFile {
 		if err := os.MkdirAll("logs", os.ModePerm); err != nil {
@@ -48,6 +49,7 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 		if err != nil {
 			log.Fatal(err)
 		}
+		defer file.Close()
 		writer = bufio.NewWriter(file)
 	}
 

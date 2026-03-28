@@ -62,9 +62,7 @@ func (s *Sync) ReverseCheck(targetDB string, givenDB string, activityID *string,
 		}
 	}
 
-	if writer != nil {
-		writer.Flush()
-	}
+	FlushWriter(writer)
 
 	fmt.Println("Audit reverse check completed.")
 
