@@ -30,6 +30,10 @@ func NewSyncAPI(GivenDB, TargetDB *pgxpool.Pool) (*Sync, error) {
 }
 
 func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activityType *string, schema string, logToFile bool) {
+	loader := NewLoader("Reading database metadata and synchronizing rows...")
+	loader.Start()
+	defer loader.Stop()
+
 	var writer *bufio.Writer
 	if logToFile && activityID != nil && activityType != nil {
 		if err := os.MkdirAll("logs", os.ModePerm); err != nil {
@@ -200,7 +204,10 @@ func Logf(writer *bufio.Writer, format string, args ...interface{}) {
 		fmt.Fprintf(writer, "%s\n", message)
 		return
 	}
+	pauseActiveLoader()
+	loaderState.stdoutMu.Lock()
 	fmt.Println(message)
+	loaderState.stdoutMu.Unlock()
 }
 
 func FlushWriter(writer *bufio.Writer) {

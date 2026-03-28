@@ -13,6 +13,10 @@ import (
 )
 
 func (s *Sync) ReverseCheck(targetDB string, givenDB string, activityID *string, activityType *string, schema string, logToFile bool) {
+	loader := NewLoader("Reading database metadata, dependencies, and rows...")
+	loader.Start()
+	defer loader.Stop()
+
 	var writer *bufio.Writer
 	if logToFile && activityID != nil && activityType != nil {
 		if err := os.MkdirAll("logs", os.ModePerm); err != nil {
@@ -42,11 +46,7 @@ func (s *Sync) ReverseCheck(targetDB string, givenDB string, activityID *string,
 		defer writer.Flush()
 	}
 
-	if writer != nil {
-		fmt.Fprintf(writer, "Audit reverse check started between %s and %s of %s schema\n", targetDB, givenDB, schema)
-	} else {
-		fmt.Printf("Audit reverse check started between %s and %s of %s schema\n", targetDB, givenDB, schema)
-	}
+	Printf(writer, "Audit reverse check started between %s and %s of %s schema\n", targetDB, givenDB, schema)
 
 	// Reverse check compares the given DB as target against the target DB as given.
 	reverseTargetAdapter := pg.New(s.GivenDB)
@@ -57,24 +57,20 @@ func (s *Sync) ReverseCheck(targetDB string, givenDB string, activityID *string,
 
 	warnings, err := auditor.Check(ctx, reverseTargetAdapter, reverseGivenAdapter, schema)
 	if err != nil {
-		if writer != nil {
-			fmt.Fprintf(writer, "Error during reverse audit check: %v\n", err)
-		} else {
-			fmt.Printf("Error during reverse audit check: %v\n", err)
-		}
+		Printf(writer, "Error during reverse audit check: %v\n", err)
 	}
 
 	for _, warning := range warnings {
 		if writer != nil {
 			messageToLog := fmt.Sprintf("%s (%s): %s", warning.Label, warning.Type, warning.Message)
-			fmt.Fprintf(writer, "%s\n", messageToLog)
+			Printf(writer, "%s\n", messageToLog)
 		} else {
-			fmt.Println(warning.GetColoredMessage())
+			Println(writer, warning.GetColoredMessage())
 		}
 	}
 
 	FlushWriter(writer)
 
-	fmt.Println("Audit reverse check completed.")
+	Println(nil, "Audit reverse check completed.")
 
 }
