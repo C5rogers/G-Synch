@@ -67,6 +67,11 @@ type SchemaAdapter interface {
 	 */
 	CopyTableData(ctx context.Context, srcDSN, dstDSN, table string) error
 	/*
+	 * MigrateMissingRowsFrom copies rows missing in destination adapter from source adapter,
+	 * returning migrated count, denied count and denied primary key references.
+	 */
+	MigrateMissingRowsFrom(ctx context.Context, source SchemaAdapter, schema string, table Table) (int, int, []string, error)
+	/*
 	 * GetPrimaryKeyValues retrieves the primary key values of a specified table.
 	 */
 	GetPrimaryKeyValues(ctx context.Context, dsn, table string) ([][]interface{}, error)

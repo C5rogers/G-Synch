@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/C5rogers/G-Synch/internal/config"
 	"github.com/C5rogers/G-Synch/internal/models"
@@ -143,5 +144,6 @@ func run(configPath, env, cmd, givenDB string, targetDB string, schema string, l
 	default:
 		slog.With("cmd", cmd).Error("unknown command")
 	}
+	time.Sleep(2 * time.Second)
 	return nil
 }

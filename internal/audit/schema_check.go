@@ -36,8 +36,8 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 	}
 	var warnings []models.CheckReturn
 
-	targetTables := mapTables(targetSchema.Tables)
-	givenTables := mapTables(givenSchema.Tables)
+	targetTables := MapTables(targetSchema.Tables)
+	givenTables := MapTables(givenSchema.Tables)
 
 	for name, tTable := range targetTables {
 		gTable, exists := givenTables[name]
@@ -53,7 +53,7 @@ func (a *SchemaAudit) Check(ctx context.Context, target core.SchemaAdapter, give
 			warnings = append(warnings, newCheck)
 			continue
 		}
-		warnings = append(warnings, compareColumns(name, tTable, gTable)...)
+		warnings = append(warnings, CompareColumns(name, tTable, gTable)...)
 
 		// Compare primary key values using a temp table populated with target table data,
 		// and detect which target rows are missing in the given table.
@@ -106,7 +106,7 @@ func compareForeignKeys(ctx context.Context, given core.SchemaAdapter, schemaNam
 				})
 				continue
 			}
-			dependencyTable, exists := mapTables(dependencySchema.Tables)[fk.ReferencedTable]
+			dependencyTable, exists := MapTables(dependencySchema.Tables)[fk.ReferencedTable]
 			if !exists {
 				issues = append(issues, models.CheckReturn{
 					Message: fmt.Sprintf("MISSING DEPENDENCY TABLE: table %s depends on table %s in schema %s which is missing", table.Name, fk.ReferencedTable, fk.ReferencedTableSchema),
@@ -134,7 +134,7 @@ func compareForeignKeys(ctx context.Context, given core.SchemaAdapter, schemaNam
 	return issues, nil
 }
 
-func serializeRow(row []interface{}) string {
+func SerializeRow(row []interface{}) string {
 	parts := make([]string, len(row))
 	for i, v := range row {
 		parts[i] = fmt.Sprintf("%v", v)
@@ -171,7 +171,7 @@ func comparePrimaryKeyValuesUsingTempTable(ctx context.Context, target core.Sche
 
 	var serializedTPKs []string
 	for _, row := range tPks {
-		serializedTPKs = append(serializedTPKs, serializeRow(row))
+		serializedTPKs = append(serializedTPKs, SerializeRow(row))
 	}
 
 	_, err = given.CreateTempRecords(ctx, serializedTPKs)
@@ -202,11 +202,11 @@ func comparePrimaryKeyValuesUsingTempTable(ctx context.Context, target core.Sche
 	return returnableCheckReturn, nil
 }
 
-func compareColumns(table string, target core.Table, given core.Table) []models.CheckReturn {
+func CompareColumns(table string, target core.Table, given core.Table) []models.CheckReturn {
 	var issues []models.CheckReturn
 
-	tCols := mapColumns(target.Columns)
-	gCols := mapColumns(given.Columns)
+	tCols := MapColumns(target.Columns)
+	gCols := MapColumns(given.Columns)
 
 	for name, col := range tCols {
 		gcol, ok := gCols[name]

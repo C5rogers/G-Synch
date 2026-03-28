@@ -16,21 +16,30 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 
 	var writer *bufio.Writer
 	if logInFile && activityID != nil && activityType != nil {
+		if err := os.MkdirAll("logs", os.ModePerm); err != nil {
+			log.Printf("failed to create logs directory: %v", err)
+			return
+		}
 		file, err := os.Create("logs/" + *activityID + "_" + *activityType + ".txt")
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("failed to create log file for activity %s (%s): %v", *activityID, *activityType, err)
+			return
 		}
+		defer file.Close()
 		writer = bufio.NewWriter(file)
 	} else if logInFile {
-		// create the below file if it does not exist
 		if err := os.MkdirAll("logs", os.ModePerm); err != nil {
-			log.Fatal(err)
+			log.Printf("failed to create logs directory: %v", err)
+			return
 		}
 		file, err := os.Create("logs/audit_check_" + time.Now().Format("20060102150405") + ".txt")
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("failed to create audit check log file: %v", err)
+			return
 		}
+		defer file.Close()
 		writer = bufio.NewWriter(file)
+		defer writer.Flush()
 	}
 	if writer != nil {
 		fmt.Fprintf(writer, "Audit check started between %s and %s of %s schema\n", targetDB, givenDB, schema)
@@ -61,9 +70,6 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 			fmt.Println(warning.GetColoredMessage())
 		}
 	}
-	if writer != nil {
-		writer.Flush()
-	}
+	FlushWriter(writer)
 	fmt.Println("Audit check completed.")
-	time.Sleep(2 * time.Second)
 }
