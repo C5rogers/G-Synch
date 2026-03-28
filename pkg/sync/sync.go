@@ -144,7 +144,6 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 	}
 
 	FlushWriter(writer)
-	time.Sleep(2 * time.Second)
 }
 
 func SchemaCompatible(sourceTable core.Table, destinationTable core.Table) bool {

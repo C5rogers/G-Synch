@@ -65,5 +65,4 @@ func (s *Sync) Check(targetDB string, givenDB string, activityID *string, activi
 		writer.Flush()
 	}
 	fmt.Println("Audit check completed.")
-	time.Sleep(2 * time.Second)
 }

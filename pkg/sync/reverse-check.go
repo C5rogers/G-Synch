@@ -67,6 +67,5 @@ func (s *Sync) ReverseCheck(targetDB string, givenDB string, activityID *string,
 	}
 
 	fmt.Println("Audit reverse check completed.")
-	time.Sleep(2 * time.Second)
 
 }
