@@ -51,6 +51,10 @@ type SchemaAdapter interface {
 	 */
 	LoadSchema(ctx context.Context, dsn string) (*Schema, error)
 	/*
+	 * ListSchemas returns the schemas available in the database.
+	 */
+	ListSchemas(ctx context.Context) ([]string, error)
+	/*
 	 * GetColumns retrieves the columns of a specified table in the schema.
 	 */
 	GetColumns(ctx context.Context, dsn string, table *Table) ([]Column, error)

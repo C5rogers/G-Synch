@@ -1,12 +1,69 @@
 package tests
 
 import (
+	"context"
 	"testing"
 
 	"github.com/C5rogers/G-Synch/internal/audit"
 	"github.com/C5rogers/G-Synch/internal/audit/core"
 	"github.com/stretchr/testify/assert"
 )
+
+type mockSchemaAdapter struct {
+	schema *core.Schema
+}
+
+func (m mockSchemaAdapter) LoadSchema(ctx context.Context, dsn string) (*core.Schema, error) {
+	return m.schema, nil
+}
+
+func (m mockSchemaAdapter) ListSchemas(ctx context.Context) ([]string, error) {
+	return []string{"public"}, nil
+}
+
+func (m mockSchemaAdapter) GetColumns(ctx context.Context, dsn string, table *core.Table) ([]core.Column, error) {
+	return nil, nil
+}
+
+func (m mockSchemaAdapter) GetForeignKeys(ctx context.Context, dsn string, table *core.Table) ([]core.ForeignKey, error) {
+	return nil, nil
+}
+
+func (m mockSchemaAdapter) GetPrimaryKeys(ctx context.Context, dsn string, table *core.Table) ([]string, error) {
+	return nil, nil
+}
+
+func (m mockSchemaAdapter) CopyTableData(ctx context.Context, srcDSN, dstDSN, table string) error {
+	return nil
+}
+
+func (m mockSchemaAdapter) MigrateMissingRowsFrom(ctx context.Context, source core.SchemaAdapter, schema string, table core.Table) (int, int, []string, error) {
+	return 0, 0, nil, nil
+}
+
+func (m mockSchemaAdapter) GetPrimaryKeyValues(ctx context.Context, dsn, table string) ([][]interface{}, error) {
+	return nil, nil
+}
+
+func (m mockSchemaAdapter) GetUnsyncedPrimaryKeyValues(ctx context.Context, dsn, table string) ([]string, error) {
+	return nil, nil
+}
+
+func (m mockSchemaAdapter) CreateTemporaryTable(ctx context.Context) error {
+	return nil
+}
+
+func (m mockSchemaAdapter) CreateTempRecords(ctx context.Context, values []string) (int64, error) {
+	return 0, nil
+}
+
+func (m mockSchemaAdapter) TruncateTemporaryTable(ctx context.Context) error {
+	return nil
+}
+
+func (m mockSchemaAdapter) Engine() string {
+	return "postgres"
+}
 
 func TestSerializeRow(t *testing.T) {
 	row := []interface{}{"abc", 123, true}
@@ -164,4 +221,23 @@ func TestCompareColumns_ExtraColumnsInGivenIgnored(t *testing.T) {
 func TestSchemaAudit_Name(t *testing.T) {
 	a := &audit.SchemaAudit{}
 	assert.Equal(t, "schema-check", a.Name())
+}
+
+func TestSchemaAudit_Check_SkipsKeylessTables(t *testing.T) {
+	schema := &core.Schema{
+		Name: "public",
+		Tables: []core.Table{
+			{
+				Name:    "job_applications",
+				Columns: []core.Column{{Name: "id", DataType: "integer", IsNullable: false}},
+			},
+		},
+	}
+
+	auditor := &audit.SchemaAudit{}
+	warnings, err := auditor.Check(context.Background(), mockSchemaAdapter{schema: schema}, mockSchemaAdapter{schema: schema}, "public")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, warnings)
+	assert.Contains(t, warnings[0].Message, "no primary key")
+	assert.Equal(t, "UNSUPPORTED", warnings[0].Type)
 }

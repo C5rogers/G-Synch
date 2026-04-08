@@ -59,6 +59,53 @@ func (q *Queries) GetColumns(ctx context.Context, arg GetColumnsParams) ([]GetCo
 	return items, nil
 }
 
+const getForeignKeyDeferrability = `-- name: GetForeignKeyDeferrability :many
+  SELECT
+      a.attname AS column_name,
+      bool_and(c.condeferrable) AS is_deferrable
+  FROM pg_constraint c
+  JOIN pg_class rel ON rel.oid = c.conrelid
+  JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+  JOIN unnest(c.conkey) AS keycols(attnum) ON true
+  JOIN pg_attribute a
+    ON a.attrelid = rel.oid
+   AND a.attnum = keycols.attnum
+  WHERE c.contype = 'f'
+    AND nsp.nspname = $1
+    AND rel.relname = $2
+  GROUP BY a.attname
+`
+
+type GetForeignKeyDeferrabilityParams struct {
+	SchemaName pgtype.Text `json:"schema_name"`
+	TableName  pgtype.Text `json:"table_name"`
+}
+
+type GetForeignKeyDeferrabilityRow struct {
+	ColumnName   string      `json:"column_name"`
+	IsDeferrable pgtype.Bool `json:"is_deferrable"`
+}
+
+func (q *Queries) GetForeignKeyDeferrability(ctx context.Context, arg GetForeignKeyDeferrabilityParams) ([]GetForeignKeyDeferrabilityRow, error) {
+	rows, err := q.db.Query(ctx, getForeignKeyDeferrability, arg.SchemaName, arg.TableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetForeignKeyDeferrabilityRow
+	for rows.Next() {
+		var i GetForeignKeyDeferrabilityRow
+		if err := rows.Scan(&i.ColumnName, &i.IsDeferrable); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getForeignKeys = `-- name: GetForeignKeys :many
   SELECT
       kcu.column_name AS column_name,

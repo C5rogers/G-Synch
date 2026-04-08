@@ -138,6 +138,14 @@ func SerializeRow(row []interface{}) string {
 }
 
 func comparePrimaryKeyValuesUsingTempTable(ctx context.Context, target core.SchemaAdapter, given core.SchemaAdapter, schemaName string, table core.Table) (models.CheckReturn, error) {
+	if len(table.PrimaryKey) == 0 {
+		return models.CheckReturn{
+			Message: fmt.Sprintf("SKIP ROW COMPARISON: table %s has no primary key, so row-level diff is not available (likely a view or keyless table)", table.Name),
+			Type:    "UNSUPPORTED",
+			Label:   "INFO",
+		}, nil
+	}
+
 	tPks, err := target.GetPrimaryKeyValues(ctx, schemaName, table.Name)
 	if err != nil {
 		return models.CheckReturn{

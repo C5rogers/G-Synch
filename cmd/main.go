@@ -1,12 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log"
 	"log/slog"
 	"os"
+	"sort"
+	"strconv"
+	"strings"
 
+	"github.com/C5rogers/G-Synch/internal/audit/adapters/pg"
+	"github.com/C5rogers/G-Synch/internal/audit/core"
 	"github.com/C5rogers/G-Synch/internal/config"
 	"github.com/C5rogers/G-Synch/internal/models"
 	"github.com/C5rogers/G-Synch/pkg/sync"
@@ -32,9 +38,6 @@ func main() {
 							givenDB := cliCtx.Args().First()
 							targetDB := cliCtx.Args().Get(1)
 							schemaFlag := cliCtx.String("schema")
-							if schemaFlag == "" {
-								schemaFlag = "public"
-							}
 							logToFile := cliCtx.Bool("log-to-file")
 							return run(cliCtx.String("config"), cliCtx.String("env"), "check", givenDB, targetDB, schemaFlag, logToFile)
 						},
@@ -46,9 +49,6 @@ func main() {
 							givenDB := cliCtx.Args().First()
 							targetDB := cliCtx.Args().Get(1)
 							schemaFlag := cliCtx.String("schema")
-							if schemaFlag == "" {
-								schemaFlag = "public"
-							}
 							logToFile := cliCtx.Bool("log-to-file")
 							return run(cliCtx.String("config"), cliCtx.String("env"), "synch", givenDB, targetDB, schemaFlag, logToFile)
 						},
@@ -60,9 +60,6 @@ func main() {
 							givenDB := cliCtx.Args().First()
 							targetDB := cliCtx.Args().Get(1)
 							schemaFlag := cliCtx.String("schema")
-							if schemaFlag == "" {
-								schemaFlag = "public"
-							}
 							logToFile := cliCtx.Bool("log-to-file")
 							return run(cliCtx.String("config"), cliCtx.String("env"), "reverse-check", givenDB, targetDB, schemaFlag, logToFile)
 						},
@@ -79,10 +76,10 @@ func main() {
 				Name:  "env",
 				Usage: "pass environment name",
 			},
-			&cli.StringFlag{
-				Name:  "schema",
-				Usage: "pass schema name by default public if not passed",
-			},
+		&cli.StringFlag{
+			Name:  "schema",
+			Usage: "pass schema name; if omitted you will be prompted to choose one",
+		},
 			&cli.BoolFlag{
 				Name:  "log-to-file",
 				Usage: "log output to a file",
@@ -122,14 +119,23 @@ func run(configPath, env, cmd, givenDB string, targetDB string, schema string, l
 		panic(err)
 	}
 
-	s, err := sync.NewSyncAPI(givenConn, targetConn)
+	targetAdapter := pg.New(targetConn)
+	givenAdapter := pg.New(givenConn)
 
+	if schema == "" {
+		schema, err = resolveSchema(ctx, targetAdapter, givenAdapter)
+		if err != nil {
+			slog.With("error", err).Error("error selecting schema")
+			return err
+		}
+		fmt.Printf("Selected schema: %s\n", schema)
+	}
+
+	s, err := sync.NewSyncAPI(givenConn, targetConn)
 	if err != nil {
 		slog.With("error", err).Error("error setting up synch api")
 		panic(err)
 	}
-
-	// i want to check the cmd to be the specific pre defined struct types and execute against the commands
 
 	command := models.CMDMapper[models.CMD(cmd)]
 
@@ -144,4 +150,69 @@ func run(configPath, env, cmd, givenDB string, targetDB string, schema string, l
 		slog.With("cmd", cmd).Error("unknown command")
 	}
 	return nil
+}
+
+func resolveSchema(ctx context.Context, targetAdapter, givenAdapter core.SchemaAdapter) (string, error) {
+	targetSchemas, err := targetAdapter.ListSchemas(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	givenSchemas, err := givenAdapter.ListSchemas(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	common := commonSchemas(targetSchemas, givenSchemas)
+	if len(common) == 0 {
+		return "", fmt.Errorf("no common schemas found between the given and target databases")
+	}
+
+	if len(common) == 1 {
+		return common[0], nil
+	}
+
+	fmt.Println("Select a schema to act on:")
+	for i, schemaName := range common {
+		fmt.Printf("  %d) %s\n", i+1, schemaName)
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("Enter schema number: ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+
+		input = strings.TrimSpace(input)
+		if input == "" {
+			return common[0], nil
+		}
+
+		selected, err := strconv.Atoi(input)
+		if err != nil || selected < 1 || selected > len(common) {
+			fmt.Println("Invalid selection, try again.")
+			continue
+		}
+
+		return common[selected-1], nil
+	}
+}
+
+func commonSchemas(targetSchemas, givenSchemas []string) []string {
+	targetSet := make(map[string]string, len(targetSchemas))
+	for _, schemaName := range targetSchemas {
+		targetSet[strings.ToLower(schemaName)] = schemaName
+	}
+
+	common := make([]string, 0)
+	for _, schemaName := range givenSchemas {
+		if original, ok := targetSet[strings.ToLower(schemaName)]; ok {
+			common = append(common, original)
+		}
+	}
+
+	sort.Strings(common)
+	return common
 }

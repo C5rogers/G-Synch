@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"strings"
 
 	"github.com/C5rogers/G-Synch/internal/audit/core"
 	pg_db "github.com/C5rogers/G-Synch/internal/audit/engines/pg/db"
@@ -96,4 +97,26 @@ func (p *Adapter) CopyTableData(ctx context.Context, srcDSN, dstDSN, table strin
 	// TODO: implement to copy table data from srcDSN to dstDSN
 	// 	Use: INSERT INTO destination_table SELECT * FROM source_table;
 	return nil
+}
+
+func (p *Adapter) ForeignKeyDeferrability(ctx context.Context, schema string, table core.Table) (map[string]bool, error) {
+	queries := pg_db.New(p.db)
+	rows, err := queries.GetForeignKeyDeferrability(ctx, pg_db.GetForeignKeyDeferrabilityParams{
+		SchemaName: pgtype.Text{String: schema, Valid: true},
+		TableName:  pgtype.Text{String: table.Name, Valid: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	deferrability := make(map[string]bool)
+	for _, row := range rows {
+		isDeferrable := false
+		if row.IsDeferrable.Valid {
+			isDeferrable = row.IsDeferrable.Bool
+		}
+		deferrability[strings.ToLower(row.ColumnName)] = isDeferrable
+	}
+
+	return deferrability, nil
 }

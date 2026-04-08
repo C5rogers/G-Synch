@@ -87,6 +87,52 @@ func TestTopologicalSort_CycleDetection(t *testing.T) {
 	assert.Contains(t, err.Error(), "circular foreign key dependency")
 }
 
+func TestTopologicalSortPartial_CycleReturnsAcyclicAndCyclicTables(t *testing.T) {
+	tables := []core.Table{
+		{Name: "A", ForeignKeys: []core.ForeignKey{{Column: "b_id", ReferencedTable: "B", ReferencedColumn: "id"}}},
+		{Name: "B", ForeignKeys: []core.ForeignKey{{Column: "a_id", ReferencedTable: "A", ReferencedColumn: "id"}}},
+		{Name: "C", ForeignKeys: []core.ForeignKey{}},
+	}
+
+	sorted, cyclic := core.TopologicalSortTablesPartial(tables)
+
+	assert.Len(t, sorted, 1)
+	assert.Equal(t, "C", sorted[0].Name)
+	assert.Len(t, cyclic, 2)
+	assert.Equal(t, "A", cyclic[0].Name)
+	assert.Equal(t, "B", cyclic[1].Name)
+}
+
+func TestBuildDependencyPlan_CycleGroup(t *testing.T) {
+	tables := []core.Table{
+		{Name: "C", ForeignKeys: []core.ForeignKey{}},
+		{Name: "A", ForeignKeys: []core.ForeignKey{{Column: "b_id", ReferencedTable: "B", ReferencedColumn: "id"}}},
+		{Name: "B", ForeignKeys: []core.ForeignKey{{Column: "a_id", ReferencedTable: "A", ReferencedColumn: "id"}}},
+	}
+
+	plan, err := core.BuildDependencyPlan(tables)
+	assert.NoError(t, err)
+	assert.Len(t, plan, 2)
+
+	var cyclicGroup, acyclicGroup core.DependencyGroup
+	for _, group := range plan {
+		if group.Cyclic {
+			cyclicGroup = group
+		} else {
+			acyclicGroup = group
+		}
+	}
+
+	assert.True(t, cyclicGroup.Cyclic)
+	assert.Len(t, cyclicGroup.Tables, 2)
+	assert.Equal(t, "A", cyclicGroup.Tables[0].Name)
+	assert.Equal(t, "B", cyclicGroup.Tables[1].Name)
+
+	assert.False(t, acyclicGroup.Cyclic)
+	assert.Len(t, acyclicGroup.Tables, 1)
+	assert.Equal(t, "C", acyclicGroup.Tables[0].Name)
+}
+
 func TestTopologicalSort_SelfReference(t *testing.T) {
 	// Table referencing itself (e.g., categories with parent_id)
 	tables := []core.Table{
