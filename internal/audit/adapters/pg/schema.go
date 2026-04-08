@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"strings"
 
 	"github.com/C5rogers/G-Synch/internal/audit/core"
 	pg_db "github.com/C5rogers/G-Synch/internal/audit/engines/pg/db"
@@ -82,4 +83,24 @@ func (p *Adapter) LoadSchema(ctx context.Context, dsn string) (*core.Schema, err
 	}
 
 	return schema, nil
+}
+
+func (p *Adapter) ListSchemas(ctx context.Context) ([]string, error) {
+	queries := pg_db.New(p.db)
+
+	schemas, err := queries.ListSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(schemas))
+	for _, schema := range schemas {
+		name := schema.(string)
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		names = append(names, name)
+	}
+
+	return names, nil
 }

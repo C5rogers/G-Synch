@@ -1,14 +1,14 @@
 package pg
 
 import (
-	"github.com/jackc/pgx/v5/pgxpool"
+	pg_db "github.com/C5rogers/G-Synch/internal/audit/engines/pg/db"
 )
 
 type Adapter struct {
-	db *pgxpool.Pool
+	db pg_db.DBTX
 }
 
-func New(db *pgxpool.Pool) *Adapter {
+func New(db pg_db.DBTX) *Adapter {
 	return &Adapter{db: db}
 }
 

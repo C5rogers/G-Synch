@@ -24,6 +24,22 @@
         AND ccu.table_schema = tc.table_schema
   WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = sqlc.arg(table_name);
 
+-- name: GetForeignKeyDeferrability :many
+  SELECT
+      a.attname AS column_name,
+      bool_and(c.condeferrable) AS is_deferrable
+  FROM pg_constraint c
+  JOIN pg_class rel ON rel.oid = c.conrelid
+  JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+  JOIN unnest(c.conkey) AS keycols(attnum) ON true
+  JOIN pg_attribute a
+    ON a.attrelid = rel.oid
+   AND a.attnum = keycols.attnum
+  WHERE c.contype = 'f'
+    AND nsp.nspname = sqlc.arg(schema_name)
+    AND rel.relname = sqlc.arg(table_name)
+  GROUP BY a.attname;
+
 -- name: GetPrimaryKeys :many
   SELECT
       kcu.column_name as column_name

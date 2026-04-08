@@ -13,6 +13,7 @@ import (
 	"github.com/C5rogers/G-Synch/internal/audit/adapters/pg"
 	"github.com/C5rogers/G-Synch/internal/audit/core"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 )
 
 type Sync struct {
@@ -64,8 +65,8 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 
 	Logf(writer, "Synchronization started between %s (target/source) and %s (given/destination) of %s schema", targetDB, givenDB, schema)
 
-	var targetAdapter core.SchemaAdapter = pg.New(s.TargetDB)
-	var givenAdapter core.SchemaAdapter = pg.New(s.GivenDB)
+	targetAdapter := pg.New(s.TargetDB)
+	givenAdapter := pg.New(s.GivenDB)
 	ctx := context.Background()
 
 	targetSchema, err := targetAdapter.LoadSchema(ctx, schema)
@@ -82,15 +83,19 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 		return
 	}
 
-	// Sort tables by FK dependency order so parent tables are migrated first.
-	sortedTables, sortErr := core.TopologicalSortTables(targetSchema.Tables)
-	if sortErr != nil {
-		Logf(writer, "WARNING: Could not resolve table dependency order: %v", sortErr)
-		Logf(writer, "Falling back to unsorted table order.")
-		sortedTables = targetSchema.Tables
-	} else {
-		Logf(writer, "Tables sorted by FK dependency order (%d tables)", len(sortedTables))
+	plan, planErr := core.BuildDependencyPlan(targetSchema.Tables)
+	if planErr != nil {
+		Logf(writer, "Error building dependency plan: %v", planErr)
+		FlushWriter(writer)
+		return
 	}
+	cyclicGroups := 0
+	for _, group := range plan {
+		if group.Cyclic {
+			cyclicGroups++
+		}
+	}
+	Logf(writer, "Dependency plan built with %d groups (%d cyclic)", len(plan), cyclicGroups)
 
 	givenTables := make(map[string]core.Table, len(givenSchema.Tables))
 	for _, table := range givenSchema.Tables {
@@ -102,7 +107,16 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 	totalSkipped := 0
 	deniedByTable := map[string][]string{}
 
-	for _, sourceTable := range sortedTables {
+	for _, group := range plan {
+		if group.Cyclic {
+			migrated, denied, skipped := s.syncCyclicGroup(ctx, writer, targetAdapter, givenAdapter, schema, group, givenTables)
+			totalMigrated += migrated
+			totalDenied += denied
+			totalSkipped += skipped
+			continue
+		}
+
+		sourceTable := group.Tables[0]
 		tableName := sourceTable.Name
 		if strings.EqualFold(tableName, "compare_table") {
 			continue
@@ -155,6 +169,120 @@ func (s *Sync) Synch(targetDB string, givenDB string, activityID *string, activi
 	}
 
 	FlushWriter(writer)
+}
+
+type foreignKeyDeferrabilityInspector interface {
+	ForeignKeyDeferrability(ctx context.Context, schema string, table core.Table) (map[string]bool, error)
+}
+
+func (s *Sync) syncCyclicGroup(ctx context.Context, writer *bufio.Writer, targetAdapter core.SchemaAdapter, givenAdapter *pg.Adapter, schema string, group core.DependencyGroup, givenTables map[string]core.Table) (int, int, int) {
+	groupTableNames := make([]string, 0, len(group.Tables))
+	for _, table := range group.Tables {
+		groupTableNames = append(groupTableNames, table.Name)
+	}
+	sort.Strings(groupTableNames)
+	Logf(writer, "CYCLIC GROUP: tables=%s", strings.Join(groupTableNames, ", "))
+
+	schemaIssues := make([]string, 0)
+	for _, table := range group.Tables {
+		destinationTable, exists := givenTables[strings.ToLower(table.Name)]
+		if !exists {
+			schemaIssues = append(schemaIssues, fmt.Sprintf("table %s missing in given database", table.Name))
+			continue
+		}
+		if !SchemaCompatible(table, destinationTable) {
+			schemaIssues = append(schemaIssues, fmt.Sprintf("table %s schema mismatch (columns/types/nullability/primary keys differ)", table.Name))
+		}
+	}
+
+	if len(schemaIssues) > 0 {
+		sort.Strings(schemaIssues)
+		Logf(writer, "SKIP CYCLIC GROUP %s: schema issues detected", strings.Join(groupTableNames, ", "))
+		for _, issue := range schemaIssues {
+			Logf(writer, "  - %s", issue)
+		}
+		return 0, 0, len(group.Tables)
+	}
+
+	inspector, ok := any(givenAdapter).(foreignKeyDeferrabilityInspector)
+	if !ok {
+		Logf(writer, "SKIP CYCLIC GROUP %s: given adapter cannot inspect foreign key deferrability", strings.Join(groupTableNames, ", "))
+		return 0, 0, len(group.Tables)
+	}
+
+	groupSet := make(map[string]struct{}, len(group.Tables))
+	for _, table := range group.Tables {
+		groupSet[strings.ToLower(table.Name)] = struct{}{}
+	}
+
+	blockedReasons := make([]string, 0)
+	for _, table := range group.Tables {
+		deferrability, err := inspector.ForeignKeyDeferrability(ctx, schema, table)
+		if err != nil {
+			blockedReasons = append(blockedReasons, fmt.Sprintf("%s: %v", table.Name, err))
+			continue
+		}
+		for _, fk := range table.ForeignKeys {
+			if _, inside := groupSet[strings.ToLower(fk.ReferencedTable)]; !inside {
+				continue
+			}
+			if ok, exists := deferrability[strings.ToLower(fk.Column)]; !exists || !ok {
+				blockedReasons = append(blockedReasons, fmt.Sprintf("%s.%s -> %s.%s is not deferrable", table.Name, fk.Column, fk.ReferencedTable, fk.ReferencedColumn))
+			}
+		}
+	}
+
+	if len(blockedReasons) > 0 {
+		sort.Strings(blockedReasons)
+		Logf(writer, "SKIP CYCLIC GROUP %s: cannot defer internal foreign keys", strings.Join(groupTableNames, ", "))
+		for _, reason := range blockedReasons {
+			Logf(writer, "  - %s", reason)
+		}
+		return 0, 0, len(group.Tables)
+	}
+
+	tx, err := s.GivenDB.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		Logf(writer, "SKIP CYCLIC GROUP %s: unable to start transaction: %v", strings.Join(groupTableNames, ", "), err)
+		return 0, 0, len(group.Tables)
+	}
+	txAdapter := pg.New(tx)
+
+	if _, err := tx.Exec(ctx, "SET CONSTRAINTS ALL DEFERRED"); err != nil {
+		_ = tx.Rollback(ctx)
+		Logf(writer, "SKIP CYCLIC GROUP %s: unable to defer constraints: %v", strings.Join(groupTableNames, ", "), err)
+		return 0, 0, len(group.Tables)
+	}
+
+	migrated := 0
+	denied := 0
+	deniedPKs := make([]string, 0)
+
+	for _, table := range group.Tables {
+		tableMigrated, tableDenied, tableDeniedPKs, migrateErr := txAdapter.MigrateMissingRowsFrom(ctx, targetAdapter, schema, table)
+		if migrateErr != nil {
+			_ = tx.Rollback(ctx)
+			Logf(writer, "SKIP CYCLIC GROUP %s: error during migration for table %s: %v", strings.Join(groupTableNames, ", "), table.Name, migrateErr)
+			return 0, 0, len(group.Tables)
+		}
+		migrated += tableMigrated
+		denied += tableDenied
+		deniedPKs = append(deniedPKs, tableDeniedPKs...)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		_ = tx.Rollback(ctx)
+		Logf(writer, "SKIP CYCLIC GROUP %s: commit failed: %v", strings.Join(groupTableNames, ", "), err)
+		return 0, 0, len(group.Tables)
+	}
+
+	Logf(writer, "CYCLIC GROUP %s: migrated=%d denied=%d", strings.Join(groupTableNames, ", "), migrated, denied)
+	if len(deniedPKs) > 0 {
+		sort.Strings(deniedPKs)
+		Logf(writer, "CYCLIC GROUP %s denied PK references: %s", strings.Join(groupTableNames, ", "), strings.Join(deniedPKs, ", "))
+	}
+
+	return migrated, denied, 0
 }
 
 func SchemaCompatible(sourceTable core.Table, destinationTable core.Table) bool {

@@ -11,6 +11,34 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const listSchemas = `-- name: ListSchemas :many
+SELECT schema_name AS schema_name
+  FROM information_schema.schemata
+  WHERE schema_name <> 'information_schema'
+    AND schema_name NOT LIKE 'pg_%'
+ORDER BY schema_name
+`
+
+func (q *Queries) ListSchemas(ctx context.Context) ([]interface{}, error) {
+	rows, err := q.db.Query(ctx, listSchemas)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []interface{}
+	for rows.Next() {
+		var schema_name interface{}
+		if err := rows.Scan(&schema_name); err != nil {
+			return nil, err
+		}
+		items = append(items, schema_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const loadSchema = `-- name: LoadSchema :many
 SELECT table_name AS table_name
   FROM information_schema.tables
